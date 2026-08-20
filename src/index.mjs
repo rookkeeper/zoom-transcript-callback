@@ -1,4 +1,5 @@
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { loadConfig } from "./config.mjs";
 import { transcriptDetails, validationResponse, verifyZoomSignature } from "./zoom.mjs";
@@ -6,7 +7,12 @@ import { transcriptDetails, validationResponse, verifyZoomSignature } from "./zo
 const config = loadConfig();
 
 const server = http.createServer(async (request, response) => {
-  if (request.method !== "POST" || request.url !== "/zoom/transcripts") {
+  const requestId = randomUUID();
+  const path = request.url?.split("?", 1)[0] ?? "";
+  log({ event: "request_received", requestId, method: request.method, path, remoteAddress: request.socket.remoteAddress });
+
+  if (request.method !== "POST" || path !== "/zoom/transcripts") {
+    log({ event: "request_rejected", requestId, status: 404, reason: "unsupported_route" });
     response.writeHead(404).end();
     return;
   }
@@ -22,19 +28,23 @@ const server = http.createServer(async (request, response) => {
       rawBody,
       maxAgeSeconds: config.maxTimestampAgeSeconds,
     })) {
+      log({ event: "request_rejected", requestId, status: 401, reason: "invalid_signature_or_timestamp" });
       response.writeHead(401).end();
       return;
     }
 
     const body = JSON.parse(rawBody);
+    log({ event: "zoom_event_received", requestId, zoomEvent: body.event ?? "missing" });
     if (body.event === "endpoint.url_validation") {
       const plainToken = body.payload?.plainToken;
       if (typeof plainToken !== "string" || !plainToken) throw new Error("Missing validation token");
+      log({ event: "request_completed", requestId, status: 200, zoomEvent: body.event });
       sendJson(response, 200, validationResponse(config.zoomSecret, plainToken));
       return;
     }
 
     if (body.event !== "recording.transcript_completed") {
+      log({ event: "request_completed", requestId, status: 204, zoomEvent: body.event, reason: "unsupported_zoom_event" });
       sendJson(response, 204);
       return;
     }
@@ -57,13 +67,18 @@ const server = http.createServer(async (request, response) => {
       }
     });
     child.unref();
-    console.log(JSON.stringify({ event: body.event, meetingUuid: details.meetingUuid, pid: child.pid, status: "rook_exec_started" }));
+    log({ event: "rook_exec_started", requestId, zoomEvent: body.event, pid: child.pid });
+    log({ event: "request_completed", requestId, status: 202, zoomEvent: body.event });
     sendJson(response, 202, { accepted: true });
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    log({ event: "request_failed", requestId, status: 400, reason: error instanceof Error ? error.message : String(error) });
     sendJson(response, 400, { error: "Invalid webhook" });
   }
 });
+
+function log(entry) {
+  console.log(JSON.stringify({ timestamp: new Date().toISOString(), ...entry }));
+}
 
 server.listen(config.port, config.host, () => {
   console.log(`Zoom callback listening on http://${config.host}:${config.port}/zoom/transcripts`);
