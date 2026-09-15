@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { createHmac } from 'node:crypto';
+import { ActivityService } from '../src/activities.mjs';
+import { ActivityRepository } from '../src/repository.mjs';
+import { callbackHandler } from '../src/callback.mjs';
+test('signed callbacks persist receipt and asynchronous outcomes without secrets', async t => {
+  const repo = new ActivityRepository(':memory:'); t.after(()=>repo.close());
+  const service = new ActivityService(repo);
+  const config = { zoomSecret:'test',maxBodyBytes:10000,maxTimestampAgeSeconds:300,piModel:'test' };
+  const server = http.createServer(callbackHandler(config,service, async () => ({ status:'succeeded',metadata:{ summary:'Done' } })));
+  await new Promise(r=>server.listen(0,'127.0.0.1',r)); t.after(()=>server.close());
+  const body = JSON.stringify({ event:'endpoint.url_validation',payload:{ plainToken:'private' } });
+  const timestamp = String(Math.floor(Date.now()/1000));
+  const signature = 'v0='+createHmac('sha256','test').update(`v0:${timestamp}:${body}`).digest('hex');
+  const url = `http://127.0.0.1:${server.address().port}/zoom/transcripts`;
+  assert.equal((await fetch(url,{method:'POST',body,headers:{'x-zm-request-timestamp':timestamp,'x-zm-signature':signature}})).status,200);
+  assert.equal(service.list()[0].status,'succeeded');
+  assert.equal((await fetch(url,{method:'POST',body})).status,401);
+  assert.equal(service.list().filter(x=>x.status==='failed').length,1);
+  assert.ok(!JSON.stringify(service.list()).includes('private'));
+});

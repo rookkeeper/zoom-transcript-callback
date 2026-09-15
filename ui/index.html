@@ -1,0 +1,4 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Callback activity</title><link rel="stylesheet" href="/style.css"></head>
+<body><main><header><p>AGENT CALLBACK SERVER</p><h1>Activity</h1><p>Callbacks received and their processing outcomes.</p></header>
+<form id="filters"><label>Endpoint <input name="endpoint" placeholder="All endpoints"></label><label>Status <select name="status"><option value="">All statuses</option><option>received</option><option>running</option><option>succeeded</option><option>failed</option><option>incomplete</option></select></label><button>Apply</button></form>
+<p><a href="/events">All activity</a></p><div id="content" aria-live="polite">Loading…</div><nav><button id="previous">Previous</button><button id="next">Next</button></nav></main><script type="module" src="/app.mjs"></script></body></html>

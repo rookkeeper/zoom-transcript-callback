@@ -25,6 +25,8 @@ export function loadConfig() {
   return {
     host: process.env.CALLBACK_HOST?.trim() || "127.0.0.1",
     port: Number.parseInt(process.env.CALLBACK_PORT ?? "8787", 10),
+    eventsPort: Number.parseInt(process.env.EVENTS_PORT ?? "8788", 10),
+    eventsDatabasePath: process.env.EVENTS_DATABASE_PATH?.trim() || join(process.cwd(), 'data', 'events.sqlite'),
     zoomSecret: required("ZOOM_WEBHOOK_SECRET"),
     piCli: process.env.PI_CLI_PATH?.trim() || "pi",
     piPathPrefix: process.env.PI_PATH_PREFIX?.trim() || "/Applications/Obsidian.app/Contents/MacOS",

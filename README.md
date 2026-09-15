@@ -144,11 +144,25 @@ Tailscale is useful for private Mac administration. A normal Tailscale address i
 
 ## Testing
 
+The local history screen is at **http://127.0.0.1:8788/events**. Its JSON API provides `GET /api/events` (optional `endpoint`, `status`, `limit`, `offset`) and `GET /api/events/:id`. `EVENTS_PORT` changes this separate local port; do not route it through Cloudflare. Forwarded requests and nonlocal Host headers are rejected. The public callback listener exposes no history routes.
+
+Activities persist in `data/events.sqlite`, configurable with `EVENTS_DATABASE_PATH`. Schema version 1 initializes automatically; a newer unsupported version stops startup. Stop the server before copying the database for backup, or use SQLite's online backup facility. Keep the database and any WAL files together during recovery. There is no historical JSONL import: the new history begins when this version starts.
+
+The database tracks callback attempts, including validation and rejection. Pi's execution JSONL remains the detailed diagnostic log, and the success JSONL remains the append-only completed-transcript ledger. These are separate files, not one atomic transaction; a disk failure or crash between writes can leave differing evidence. Startup marks abandoned active database rows incomplete rather than guessing success or replaying them.
+
+For activation, wait until Pi jobs have finished, then restart the existing LaunchAgent with `launchctl kickstart -k "gui/$(id -u)/com.rookkeeper.zoom-transcript-callback"`. Check both listeners and the startup log. Forced restarts can interrupt work; the launcher has a short forced-stop grace period. Ordinary SIGTERM to the Node process drains active jobs, but an external supervisor may enforce its own timeout.
+
+See [product intent](PRODUCT/overview.md), [server interfaces](ARCHITECTURE/server.md), [UI layers](ARCHITECTURE/ui.md), and [database schema](ARCHITECTURE/database.md). A future callback supplies its own verification, endpoint/type/title, selected metadata and processor to the same activity service.
+
 Run unit tests:
 
 ```bash
 npm test
+npx playwright install chromium
+npm run test:browser
 ```
+
+Tests use temporary databases, fake Pi processes, and synthetic browser fixtures. They do not call a model or update Peeps. Browser tests bind port 18788; HTTP integration tests use temporary loopback ports.
 
 With the server running in another terminal, send signed local test requests:
 
