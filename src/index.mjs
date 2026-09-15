@@ -2,6 +2,7 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { loadConfig } from "./config.mjs";
+import { appendJsonLine, jobDirectory, piArgs, readCompletionMarker, redactPiOutput } from "./pi.mjs";
 import { transcriptDetails, validationResponse, verifyZoomSignature } from "./zoom.mjs";
 
 const config = loadConfig();
@@ -50,24 +51,54 @@ const server = http.createServer(async (request, response) => {
     }
 
     const details = transcriptDetails(body);
-    const prompt = renderPrompt(config.promptTemplate, details);
-    const args = ["exec", "--runtime", config.runtimeId, "--title", `${config.titlePrefix} · ${details.topic}`, "--server-url", config.rookServerUrl, "--auth-token", config.rookAuthToken];
-    for (const environment of config.environments) args.push("--join", environment);
-    args.push(prompt);
-    const child = spawn(config.rookCli, args, { detached: true, stdio: ["ignore", "ignore", "pipe"], env: process.env });
-    child.stderr.on("data", () => {
-      // Do not log CLI output: prompts can contain temporary Zoom download tokens.
+    const title = `${config.titlePrefix} · ${details.topic}`;
+    const jobDir = jobDirectory(config.piWorkRoot, requestId);
+    const prompt = renderPrompt(config.promptTemplate, { ...details, jobDirectory: jobDir, peepsSkillDirectory: config.piSkills[0] });
+    const args = piArgs({ model: config.piModel, skills: config.piSkills, title, prompt });
+    appendJsonLine(config.piLogPath, { event: "pi_started", requestId, meetingUuid: details.meetingUuid, meetingId: details.meetingId, recordingFileId: details.recordingFileId, title, cwd: jobDir, model: config.piModel || "default" });
+    const childEnvironment = { ...process.env, PATH: [config.piPathPrefix, process.env.PATH].filter(Boolean).join(":") };
+    const child = spawn(config.piCli, args, { detached: true, stdio: ["ignore", "pipe", "pipe"], cwd: jobDir, env: childEnvironment });
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      appendJsonLine(config.piLogPath, { event: "pi_timed_out", requestId, meetingUuid: details.meetingUuid, meetingId: details.meetingId, recordingFileId: details.recordingFileId, pid: child.pid, timeoutMs: config.piTimeoutMs });
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch (error) {
+        appendJsonLine(config.piLogPath, { event: "pi_timeout_kill_failed", requestId, pid: child.pid, message: error instanceof Error ? error.message : String(error) });
+      }
+    }, config.piTimeoutMs);
+    timeout.unref();
+    child.stdout.on("data", (chunk) => {
+      appendJsonLine(config.piLogPath, { event: "pi_stdout", requestId, output: redactPiOutput(chunk, details.downloadToken) });
+    });
+    child.stderr.on("data", (chunk) => {
+      appendJsonLine(config.piLogPath, { event: "pi_stderr", requestId, output: redactPiOutput(chunk, details.downloadToken) });
     });
     child.once("error", (error) => {
-      console.error(JSON.stringify({ event: body.event, meetingUuid: details.meetingUuid, pid: child.pid, status: "spawn_failed", code: error.code ?? "unknown" }));
+      clearTimeout(timeout);
+      appendJsonLine(config.piLogPath, { event: "pi_spawn_failed", requestId, meetingUuid: details.meetingUuid, code: error.code ?? "unknown", message: error.message });
+      console.error(JSON.stringify({ event: body.event, meetingUuid: details.meetingUuid, pid: child.pid, status: "pi_spawn_failed", code: error.code ?? "unknown" }));
     });
     child.once("exit", (code, signal) => {
+      clearTimeout(timeout);
       if (code !== 0 || signal) {
-        console.error(JSON.stringify({ event: body.event, meetingUuid: details.meetingUuid, pid: child.pid, status: "rook_exec_failed", code, signal }));
+        appendJsonLine(config.piLogPath, { event: "pi_failed", requestId, meetingUuid: details.meetingUuid, meetingId: details.meetingId, recordingFileId: details.recordingFileId, pid: child.pid, code, signal, timedOut });
+        console.error(JSON.stringify({ event: body.event, meetingUuid: details.meetingUuid, pid: child.pid, status: timedOut ? "pi_timed_out" : "pi_failed", code, signal }));
+        return;
       }
+      const completion = readCompletionMarker(jobDir);
+      if (!completion) {
+        appendJsonLine(config.piLogPath, { event: "pi_incomplete", requestId, meetingUuid: details.meetingUuid, meetingId: details.meetingId, recordingFileId: details.recordingFileId, pid: child.pid, reason: "missing_completion_marker" });
+        console.error(JSON.stringify({ event: body.event, meetingUuid: details.meetingUuid, pid: child.pid, status: "pi_incomplete" }));
+        return;
+      }
+      const success = { event: "transcript_processed", requestId, meetingUuid: details.meetingUuid, meetingId: details.meetingId, recordingFileId: details.recordingFileId, recordingFileName: details.recordingFileName, pid: child.pid, summary: typeof completion.summary === "string" ? completion.summary : "" };
+      appendJsonLine(config.piLogPath, { ...success, event: "pi_succeeded" });
+      appendJsonLine(config.successLogPath, success);
     });
     child.unref();
-    log({ event: "rook_exec_started", requestId, zoomEvent: body.event, pid: child.pid });
+    log({ event: "pi_started", requestId, zoomEvent: body.event, pid: child.pid });
     log({ event: "request_completed", requestId, status: 202, zoomEvent: body.event });
     sendJson(response, 202, { accepted: true });
   } catch (error) {

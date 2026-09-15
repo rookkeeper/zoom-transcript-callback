@@ -1,9 +1,9 @@
 # Zoom transcript callback
 
-A small local webhook adapter that receives Zoom's `recording.transcript_completed` event and starts one configured Rook session with `rook exec`.
+A small local webhook adapter that receives Zoom's `recording.transcript_completed` event and starts one Pi transcript-processing job.
 
 ```text
-Zoom → HTTPS /zoom/transcripts → this process → rook exec → local Rook server
+Zoom → HTTPS /zoom/transcripts → this process → Pi → Peeps Obsidian vault
 ```
 
 This prototype runs on the Mac. If the Mac is asleep or the callback/tunnel is unavailable, Zoom may retry for a limited period and the event can be missed.
@@ -27,9 +27,11 @@ Zoom sends `endpoint.url_validation` during setup. The callback handles that cha
 
 The event payload includes meeting metadata, a completed transcript recording file, its `download_url`, and a temporary `download_token`. The configured prompt passes those values to the agent, which is responsible for downloading and processing the transcript. Treat the token and transcript as sensitive.
 
-### Local Rook
+### Pi
 
-Rook must be set up and running locally, with the runtime and environments you want to use configured. Follow the [Rook README](https://github.com/rookkeeper/rook#readme) for setup instructions.
+Install and authenticate [Pi](https://github.com/badlogic/pi-mono) for the model you want to use. The LaunchAgent runs Pi non-interactively with the `how-to-use-peeps-obsidian` skill from `PI_SKILLS_ROOT`, plus the shell and file tools needed to download a transcript and update the vault. The Obsidian CLI executable must be available; a separate CLI skill is not required.
+
+Each job receives its private temporary directory in the prompt. Pi downloads the original transcript to `zoom-transcript.vtt`, creates the event note, and runs the Peeps skill's `scripts/append_transcript.py` with that local file. The prompt requires verification of the bottom-of-note transcript appendix before writing the completion marker. Temporary job files remain available for diagnosis until the operating system clears them.
 
 ## Configuration
 
@@ -40,9 +42,13 @@ cp .env.example .env
 Edit `.env`:
 
 - `ZOOM_WEBHOOK_SECRET` — Zoom's webhook secret token.
-- `ROOK_SERVER_URL` / `ROOK_AUTH_TOKEN` — local Rook connection.
-- `ROOK_RUNTIME_ID` — configured Rook runtime.
-- `ROOK_ENVIRONMENTS` — comma-separated environment ids to join.
+- `PI_CLI_PATH` — Pi executable, defaulting to `pi`.
+- `PI_PATH_PREFIX` — directory prepended to Pi's `PATH`; defaults to the macOS Obsidian CLI directory.
+- `PI_MODEL` — optional Pi model ID. Leave blank to use Pi's configured default.
+- `PI_SKILLS_ROOT` — parent directory containing the required Peeps and Obsidian skills.
+- `PI_TIMEOUT_MS` — maximum time for one Pi job, defaulting to 10 minutes. A timeout is logged and terminates the job process group.
+- `PI_EXECUTION_LOG_PATH` — append-only JSONL log of Pi lifecycle events, stdout, stderr, and errors. Temporary Zoom bearer tokens are redacted.
+- `ZOOM_SUCCESS_LOG_PATH` — append-only JSONL log of transcript jobs that Pi explicitly marked completed after its Peeps updates.
 - The editable prompt is [`prompts/zoom-transcript.md`](prompts/zoom-transcript.md). See [`prompts/zoom-transcript.example.md`](prompts/zoom-transcript.example.md) for a simple example and the complete placeholder reference.
 
 Start or restart the callback with:
@@ -151,15 +157,9 @@ With the server running in another terminal, send signed local test requests:
 ./scripts/send-fake-request.sh transcript
 ```
 
-The validation request should return Zoom's validation response. The transcript request should return `{"accepted":true}` and launch the configured `rook exec` command. Use `validation` first; `transcript` starts a Rook session and uses the fake download URL.
+The validation request should return Zoom's validation response. The transcript request should return `{"accepted":true}` and launch Pi. Use `validation` first; `transcript` starts a Pi session and uses the fake download URL.
 
-Before configuring Zoom, test the full local path with a signed fixture and a fake `rook` executable. Then use Zoom's validation control in the Marketplace app. After one real meeting transcript is ready, verify that a new session appears in:
-
-```bash
-rook sessions --auth-token "$ROOK_AUTH_TOKEN"
-```
-
-The callback returns before the agent finishes. Inspect the callback process logs and the Rook session transcript when debugging.
+Before configuring Zoom, test the full local path with a signed fixture and a fake `pi` executable. Then use Zoom's validation control in the Marketplace app. The callback returns before Pi finishes. Inspect the callback process logs, `PI_EXECUTION_LOG_PATH`, and `ZOOM_SUCCESS_LOG_PATH` when debugging.
 
 ## Security notes
 
@@ -167,5 +167,5 @@ The callback returns before the agent finishes. Inspect the callback process log
 - Do not log request bodies, transcript content, Zoom download tokens, or Rook auth tokens.
 - Keep the callback bound to loopback; expose it only through the tunnel.
 - Enforce the request age and body-size limits.
-- The webhook payload is untrusted meeting data. The callback uses a fixed executable, runtime, server, environment list, and prompt file; payload values cannot configure code execution.
-- Each accepted callback starts a new Rook session.
+- The webhook payload is untrusted meeting data. The callback uses a fixed Pi executable, skill list, model setting, and prompt file; payload values cannot configure code execution.
+- Each accepted callback starts a new Pi session in an isolated private working directory.
