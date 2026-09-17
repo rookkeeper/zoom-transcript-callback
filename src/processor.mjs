@@ -10,26 +10,42 @@ export function createProcessor(config, { spawn = spawnProcess, kill = (pid, sig
     const context = { requestId, meetingUuid:details.meetingUuid, meetingId:details.meetingId, recordingFileId:details.recordingFileId };
     const log = (event, fields={}) => appendJsonLine(config.piLogPath, {event,...context,...fields});
     log('pi_started',{title,cwd,model:config.piModel || 'default'});
-    let child, timer, forceTimer, settled=false, timedOut=false;
+    let child, timer, forceTimer, idleTimer, settled=false, timedOut=false, lastCommand='';
+    const idleMs = Number.isFinite(config.piIdleTimeoutMs) ? config.piIdleTimeoutMs : Math.min(config.piTimeoutMs, 10 * 60 * 1000);
     const finish = (status,error,metadata={}) => {
       if(settled) return;
-      settled=true; clearTimeout(timer);
+      settled=true; clearTimeout(timer); clearTimeout(idleTimer);
       try { log(`pi_${status}`,{error,pid:child?.pid,...metadata}); resolve({status,error,metadata}); }
       catch(logError) { reject(logError); }
     };
+    const armIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer=setTimeout(()=>{
+        if(settled) return;
+        timedOut=true;
+        finish('failed',`Pi stalled with no output for ${Math.round(idleMs/1000)}s${lastCommand?` after: ${lastCommand}`:''}`,{timeoutMs:config.piTimeoutMs,idleMs,lastCommand});
+        forceTimer=setTimeout(()=>{try {kill(child.pid,'SIGKILL');} catch {}},5000);
+        forceTimer.unref?.();
+        try {kill(child.pid,'SIGTERM');} catch {}
+      },idleMs);
+      idleTimer.unref?.();
+    };
+    const noteOutput = (command) => { if(command) lastCommand=String(command).slice(0,300); };
     try {
       child=spawn(config.piCli,piArgs({model:config.piModel,skills:config.piSkills,title,prompt}),{
         detached:true,stdio:['ignore','pipe','pipe'],cwd,
         env:{...process.env,PATH:[config.piPathPrefix,process.env.PATH].filter(Boolean).join(':')},
       });
     } catch(error) { finish('failed','Pi could not start',{code:error.code || 'unknown'}); return; }
+    armIdleTimer();
     for(const stream of ['stdout','stderr']) child[stream].on('data',chunk=>{
+      noteOutput(redactPiOutput(chunk,details.downloadToken).slice(0,300)); armIdleTimer();
       try { log(`pi_${stream}`,{output:redactPiOutput(chunk,details.downloadToken)}); }
       catch(error) { finish('failed','Execution log write failed'); try { kill(child.pid,'SIGTERM'); } catch {} }
     });
     child.once('error',error=>finish('failed','Pi could not start',{code:error.code || 'unknown'}));
     child.once('close',(code,signal)=>{
-      clearTimeout(forceTimer);
+      clearTimeout(forceTimer); clearTimeout(idleTimer);
       if(settled) return;
       if(timedOut) { finish('failed','Pi timed out',{code,signal,timeoutMs:config.piTimeoutMs}); return; }
       if(code!==0 || signal) { finish('failed','Pi exited unsuccessfully; inspect private execution log',{code,signal}); return; }

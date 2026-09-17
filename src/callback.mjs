@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
+import { runTranscriptJob } from "./retry.mjs";
 import { transcriptDetails, validationResponse, verifyZoomSignature } from './zoom.mjs';
 
 export function callbackHandler(config, activities, processor) {
@@ -29,10 +30,14 @@ export function callbackHandler(config, activities, processor) {
       }
       if (body.event !== 'recording.transcript_completed') { activities.finish(id,'incomplete',{},'Unsupported Zoom event'); send(204); return; }
       const details = transcriptDetails(body);
+      const title = typeof body.payload?.object?.topic === 'string' ? body.payload.object.topic : body.event || 'Zoom callback';
       activities.update(id,{ metadata:{ meetingId:details.meetingId,meetingUuid:details.meetingUuid,recordingFileId:details.recordingFileId,model:config.piModel } });
-      // Acknowledge before model work; processor owns asynchronous completion.
+      // Acknowledge before model work; the retry runner owns asynchronous completion.
       send(202,{ accepted:true, activityId:id });
-      void activities.run(id,()=>processor(details,id)).catch(error=>console.error('Unable to persist outcome',id,error.code || error.name));
+      void runTranscriptJob({
+        activities, details, endpoint, type:body.event || 'unknown', title, firstActivityId:id,
+        maxAttempts:config.piMaxAttempts, retryDelayMs:config.piRetryDelayMs, processor,
+      }).catch(error=>console.error('Unable to persist outcome',id,error.code || error.name));
     } catch (error) {
       try { if (activities.get(id)) activities.finish(id,'failed',{},'Callback validation or storage failed'); } catch {}
       console.error('Callback failed',id,error.code || error.name);
