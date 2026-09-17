@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPiSkills, piArgs, readCompletionMarker, redactPiOutput } from "../src/pi.mjs";
 
-test("loads the Peeps skill without requiring the removed Obsidian CLI skill", () => {
+test("loads the Peeps and general Obsidian skills", () => {
   const root = mkdtempSync(join(tmpdir(), "pi-skills-"));
-  for (const name of ["how-to-use-peeps-obsidian"]) {
+  for (const name of ["how-to-use-peeps-obsidian", "obsidian-general-usage"]) {
     mkdirSync(join(root, name));
     writeFileSync(join(root, name, "SKILL.md"), "# Skill\n");
   }
-  assert.deepEqual(loadPiSkills(root), [join(root, "how-to-use-peeps-obsidian")]);
+  assert.deepEqual(loadPiSkills(root), [join(root, "how-to-use-peeps-obsidian"), join(root, "obsidian-general-usage")]);
 });
 
 test("builds an unattended Pi command with explicit skills", () => {

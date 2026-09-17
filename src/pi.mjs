@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const REQUIRED_SKILLS = ["how-to-use-peeps-obsidian"];
+const REQUIRED_SKILLS = ["how-to-use-peeps-obsidian", "obsidian-general-usage"];
 
 export function loadPiSkills(skillsRoot) {
   const skills = REQUIRED_SKILLS.map((name) => join(skillsRoot, name));

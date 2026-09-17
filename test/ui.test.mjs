@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { route,apiClient,createState,render } from '../ui/model.mjs';
+import { route,apiClient,createState,render,rowHtml,itemsEqual } from '../ui/model.mjs';
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 test('routes and components expose endpoints and escape arbitrary metadata',()=>{
   assert.deepEqual(route('/events/a'),{id:'a'});
@@ -39,4 +39,19 @@ test('client and view state handle filters, errors and stale refresh',async()=>{
   pending[1]({items:[{id:'new'}]}); await second;
   pending[0]({items:[{id:'old'}]}); await first;
   assert.equal(state.value.items[0].id,'new');
+});
+test('quiet state loads skip the loading flash and clear errors only on success',async()=>{
+  let calls=0; const state=createState({list:async()=>{calls++; if(calls===1)throw new Error('boom'); return {items:[{id:'a'}]};}});
+  await state.load({}); assert.equal(state.value.loading,false); assert.equal(state.value.error,'boom');
+  assert.equal(state.value.loading,false);
+  await state.load({},{quiet:true}); assert.equal(state.value.loading,false); assert.equal(state.value.error,null);
+  assert.equal(state.value.items[0].id,'a');
+});
+test('row helpers reuse escaped markup and detect unchanged lists',()=>{
+  const row={id:'a',title:'<img>',endpoint:'/zoom',status:'running',metadata:{x:'<script>'}};
+  const html=rowHtml(row);
+  assert.ok(html.includes('&lt;img&gt;')); assert.ok(!html.includes('<script>'));
+  assert.ok(itemsEqual([row],[JSON.parse(JSON.stringify(row))]));
+  assert.ok(!itemsEqual([row],[{...row,status:'failed'}]));
+  assert.ok(render({items:[row],loading:true}).includes('Refreshing'));
 });

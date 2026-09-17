@@ -1,12 +1,10 @@
-Download the Zoom transcript using the URL and temporary bearer token below. Save the downloaded file into the current directory, then read and process it.
+Download the Zoom transcript with the URL and bearer token below into `./zoom-transcript.vtt` in `{{jobDirectory}}`. If that file already exists with non-zero size, verify it is valid WEBVTT and reuse it. Keep it unchanged; it is the transcript appendix source.
 
-Your private temporary working directory is `{{jobDirectory}}`. Download the original VTT into `./zoom-transcript.vtt` there. Keep that file unchanged, including speaker labels and timestamps; use it as the source for the transcript appendix.
+Process the transcript and update the Peeps Obsidian vault per the loaded Peeps skill. Vault root: `/Users/johnberryman/Library/CloudStorage/GoogleDrive-jfberryman@gmail.com/My Drive/Personal/Journals/Obsidian Notes/Peeps`.
 
-Process the transcript and update the Peeps Obsidian vault according to the loaded Peeps skill. The vault is named `Peeps` and is at `/Users/johnberryman/Library/CloudStorage/GoogleDrive-jfberryman@gmail.com/My Drive/Personal/Journals/Obsidian Notes/Peeps`.
+Use the `obsidian` CLI for all Peeps discovery/search/reads (see loaded obsidian-general-usage skill). Never `find`/`ls`/`rg` the vault or home directory; cloud sync makes raw recursive searches hang. `vault=` goes right after `obsidian` (`obsidian vault=Peeps search query="Ceccarelli" limit=20`) — placed after the subcommand it is silently ignored and you search the wrong vault. For CLI syntax use `obsidian help <command>`; never pipe `obsidian help` to `head` (SIGPIPE hangs the job until timeout). Edit notes with file tools, not the CLI.
 
-Use the `obsidian` CLI with `vault=Peeps` for every Peeps discovery and read operation. Do not use `find`, `ls`, `rg`, or other raw shell discovery against the vault or home directory. This vault is cloud-synced and raw recursive searches can hang the transcript job.
-
-Use `obsidian help` for CLI syntax when needed. Read `{{peepsSkillDirectory}}/references/add-event.md` before creating the event. After writing the event summary and required participant links, append the original transcript using the skill's script:
+Read `{{peepsSkillDirectory}}/references/add-event.md` before creating the event. After writing the event summary and required participant links, append the original transcript using the skill's script:
 
 ```bash
 python3 '{{peepsSkillDirectory}}/scripts/append_transcript.py' --event '/absolute/path/to/event-note.md' --transcript './zoom-transcript.vtt'

@@ -9,7 +9,7 @@ import { createProcessor } from '../src/processor.mjs';
 for (const outcome of ['success','exit','spawn','missing','timeout']) {
   test(`Pi processor records ${outcome} and writes ledger only for verified success`, async t => {
     const root=mkdtempSync(join(tmpdir(),'processor-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
-    const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}} {{jobDirectory}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10};
+    const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}} {{jobDirectory}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:outcome==='timeout'?10:10000,piIdleTimeoutMs:5000};
     const child=new EventEmitter(); child.stdout=new EventEmitter(); child.stderr=new EventEmitter(); child.pid=123;
     let killed=false;
     const spawn=(_cmd,_args,options)=>{
@@ -30,3 +30,32 @@ for (const outcome of ['success','exit','spawn','missing','timeout']) {
     if(outcome==='timeout'){assert.equal(killed,true);assert.match(result.error,/timed out/i);}
   });
 }
+
+test('Pi processor fails fast when the child goes silent (idle watchdog)', async t => {
+  const root=mkdtempSync(join(tmpdir(),'processor-idle-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10000,piIdleTimeoutMs:30};
+  const child=new EventEmitter(); child.stdout=new EventEmitter(); child.stderr=new EventEmitter(); child.pid=456;
+  let killed=false;
+  const processor=createProcessor(config,{spawn:()=>child,kill:()=>{killed=true;child.emit('close',null,'SIGTERM');}});
+  const started=Date.now();
+  const result=await processor({topic:'Meeting',meetingId:'42'},'job');
+  assert.equal(result.status,'failed');
+  assert.match(result.error,/stalled with no output/i);
+  assert.ok(Date.now()-started<5000,'idle watchdog fired well before the outer timeout');
+  assert.equal(killed,true);
+});
+
+test('Pi processor resets the idle watchdog on child output', async t => {
+  const root=mkdtempSync(join(tmpdir(),'processor-idle-reset-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10000,piIdleTimeoutMs:80};
+  const child=new EventEmitter(); child.stdout=new EventEmitter(); child.stderr=new EventEmitter(); child.pid=789;
+  const keepalive=setInterval(()=>child.stdout.emit('data','still working'),30); t.after(()=>clearInterval(keepalive));
+  const processor=createProcessor(config,{spawn:()=>child,kill:()=>{}});
+  const pending=processor({topic:'Meeting',meetingId:'42'},'job');
+  await new Promise(r=>setTimeout(r,200));
+  clearInterval(keepalive);
+  writeFileSync(join(config.piWorkRoot,'job','zoom-processing-result.json'),JSON.stringify({status:'completed',summary:'Done'}));
+  child.emit('close',0,null);
+  const result=await pending;
+  assert.equal(result.status,'succeeded');
+});

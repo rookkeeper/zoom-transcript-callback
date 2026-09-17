@@ -9,7 +9,7 @@ A small browser application with separate routing, HTTP client, state, and rende
 | View state: `ui/state.mjs` | `createState(client) -> {value, load(query)}` | Tracks items/loading/error; `load` returns a promise and ignores stale responses |
 | Components: `ui/components.mjs` | `render({items?, loading?, error?}) -> HTML string` | Escaped table, statuses, empty/error/loading messages, expandable YAML-style metadata |
 | Exports: `ui/model.mjs` | Re-exports the above | Stable import surface |
-| Controller: `ui/app.mjs` | DOM/history events → state + rendered page | Connects modules, filters, pagination, five-second refresh and per-route expanded rows |
+| Controller: `ui/app.mjs` | DOM/history events → state + rendered page | Connects modules, filters, pagination, quiet five-second patch refresh and per-route expanded rows |
 | Shell/style | `ui/index.html`, `ui/style.css` | Accessible controls, document structure and layout |
 
 Each row shows title, endpoint, receipt/start/end times, and status. Clicking the title opens a shareable local detail URL. Browser back/forward restores the route; query parameters retain filters and page offset. Metadata values are escaped before insertion into HTML.
