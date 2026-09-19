@@ -45,6 +45,31 @@ test('Pi processor fails fast when the child goes silent (idle watchdog)', async
   assert.equal(killed,true);
 });
 
+test('Pi processor fails fast with a greppable error when obsidian is missing from PATH', async t => {
+  const root=mkdtempSync(join(tmpdir(),'processor-obsidian-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10000,piIdleTimeoutMs:5000};
+  let spawned=false;
+  const processor=createProcessor(config,{spawn:()=>{spawned=false;throw new Error('should not spawn');},which:()=>null});
+  const result=await processor({topic:'Meeting',meetingId:'42'},'job');
+  assert.equal(spawned,false);
+  assert.equal(result.status,'failed');
+  assert.match(result.error,/OBSIDIAN_CLI_MISSING/);
+  const logged=readFileSync(config.piLogPath,'utf8');
+  assert.match(logged,/OBSIDIAN_CLI_MISSING/);
+});
+
+test('Pi processor passes PATH through unchanged and spawns when obsidian resolves', async t => {
+  const root=mkdtempSync(join(tmpdir(),'processor-obsidian-ok-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}} {{jobDirectory}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10000,piIdleTimeoutMs:5000};
+  const child=new EventEmitter(); child.stdout=new EventEmitter(); child.stderr=new EventEmitter(); child.pid=321;
+  let seenEnv=null;
+  const spawn=(_cmd,_args,options)=>{seenEnv=options.env;writeFileSync(join(options.cwd,'zoom-processing-result.json'),JSON.stringify({status:'completed',summary:'Done'}));setImmediate(()=>child.emit('close',0,null));return child;};
+  const processor=createProcessor(config,{spawn,which:()=>'/usr/local/bin/obsidian'});
+  const result=await processor({topic:'Meeting',meetingId:'42'},'job');
+  assert.equal(result.status,'succeeded');
+  assert.equal(seenEnv.PATH,process.env.PATH);
+});
+
 test('Pi processor resets the idle watchdog on child output', async t => {
   const root=mkdtempSync(join(tmpdir(),'processor-idle-reset-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
   const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10000,piIdleTimeoutMs:80};
