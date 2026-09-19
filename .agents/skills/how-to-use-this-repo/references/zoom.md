@@ -39,8 +39,8 @@ Flow: `Zoom → POST /zoom/transcripts → Pi job → Peeps vault`.
 ## 3. Zoom app setup (do this on marketplace.zoom.us)
 
 - **Go to:** Zoom App Marketplace → Develop → Build App. **Type: General app** (unlisted keeps it private). It is the only type that supports *both* event subscriptions and the `cloud_recording` scopes — Server-to-Server OAuth cannot access recording files; webhook-only apps have no API credentials.
-- **OAuth redirect URL:** `https://rook-callbacks.arcturus-labs.com/zoom/oauth` (Zoom rejects `localhost`; must be public HTTPS).
-- **Event subscription:** enable, add `recording.transcript_completed`, endpoint URL `https://rook-callbacks.arcturus-labs.com/zoom/transcripts`. The Secret Token from this subscription → `ZOOM_WEBHOOK_SECRET`. The running server answers Zoom's `url_validation` automatically.
+- **OAuth redirect URL:** `https://dev-callbacks.arcturus-labs.com/zoom/oauth` (Zoom rejects `localhost`; must be public HTTPS).
+- **Event subscription:** enable, add `recording.transcript_completed`, endpoint URL `https://dev-callbacks.arcturus-labs.com/zoom/transcripts`. The Secret Token from this subscription → `ZOOM_WEBHOOK_SECRET`. The running server answers Zoom's `url_validation` automatically.
 - **Scopes** (plain `:read` variants; skip `:admin`/`:master` and all Delete scopes):
   - `cloud_recording:read:list_user_recordings` — list recordings ("List all recordings").
   - `cloud_recording:read:list_recording_files` — per-meeting file/download URLs ("Get meeting recordings").
