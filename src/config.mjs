@@ -43,5 +43,10 @@ export function loadConfig() {
     promptTemplate: readPromptFile(promptPath),
     maxBodyBytes: Number.parseInt(process.env.MAX_WEBHOOK_BODY_BYTES ?? String(256 * 1024), 10),
     maxTimestampAgeSeconds: Number.parseInt(process.env.MAX_WEBHOOK_AGE_SECONDS ?? "300", 10),
+    zoomClientId: process.env.ZOOM_CLIENT_ID?.trim() || "",
+    zoomClientSecret: process.env.ZOOM_CLIENT_SECRET?.trim() || "",
+    zoomTokenUrl: process.env.ZOOM_TOKEN_URL?.trim() || "https://zoom.us/oauth/token",
+    zoomRedirectUri: process.env.ZOOM_REDIRECT_URI?.trim() || "https://rook-callbacks.arcturus-labs.com/zoom/oauth",
+    zoomOAuthStorePath: process.env.ZOOM_OAUTH_STORE_PATH?.trim() || join(process.cwd(), 'data', 'zoom-oauth.json'),
   };
 }

@@ -1,0 +1,71 @@
+# Zoom integration
+
+> **Path reminder:** paths here are relative to the repo root
+> (`.../zoom-transcript-callback/`).
+
+Two halves: (1) the **callback** — Zoom pushes an event, Pi processes the
+meeting; (2) the **API client** — we pull recording assets on demand. Both
+run under one unified Zoom **General app**.
+
+## 1. Meeting processing (callback)
+
+Flow: `Zoom → POST /zoom/transcripts → Pi job → Peeps vault`.
+
+- `src/callback.mjs` — verifies the HMAC signature (`ZOOM_WEBHOOK_SECRET`), answers `endpoint.url_validation`, then hands `recording.transcript_completed` payloads to the retry runner. Acknowledges 202 before model work.
+- `src/zoom.mjs` — `transcriptDetails()` extracts meeting metadata plus the transcript `download_url` and temporary `download_token`.
+- `src/processor.mjs` — spawns Pi (`--print`, tools `bash,read,edit,write`) in a private job dir under `PI_WORK_ROOT`. Overall timeout `PI_TIMEOUT_MS`; idle watchdog `PI_IDLE_TIMEOUT_MS` (Pi emits nothing until done, so this must exceed the longest quiet stretch — large transcripts take minutes before first output). Success requires Pi to write `zoom-processing-result.json` with `status: completed`.
+- `src/retry.mjs` — `runTranscriptJob()` retries post-spawn failures (`PI_MAX_ATTEMPTS`, default 2; `PI_RETRY_DELAY_MS` backoff, default 60s). Each attempt is a fresh activity row linked via `retryOf`. Pre-spawn failures ("Pi could not start") are not retried.
+- `src/pi.mjs` — Pi arg construction, required skills (`how-to-use-peeps-obsidian`, `obsidian-general-usage` from `PI_SKILLS_ROOT`), token redaction in logs.
+
+### Where the Pi instructions live
+
+`prompts/zoom-transcript.md` is the live prompt. It tells Pi to: download the transcript to `./zoom-transcript.vtt` (reusing a valid existing file), follow the Peeps skill to create/update person and `#event` notes, append the transcript via the skill's `append_transcript.py` script, verify the appendix, then write the completion marker. `{{placeholders}}` are filled from the webhook payload; see `prompts/zoom-transcript.example.md` for the full list. **Edit the `.md` to change Pi's behavior** — HTML comments are stripped at load, so they are safe for developer notes.
+
+### Operating it
+
+- Start/restart: `./scripts/run-server.sh` (loads `.env`, kills the old listener, `npm start`). Production runs under a LaunchAgent; see README "Start automatically on macOS".
+- History UI: `http://127.0.0.1:8788/events` (local only).
+- Failed job? `node scripts/manual-retry.mjs <activityId>` re-runs with a fresh row, reusing the downloaded VTT.
+- Test locally: `./scripts/send-fake-request.sh validation|transcript`.
+- Evidence: `data/events.sqlite` (activity ledger), `logs/zoom-transcript-pi.jsonl` (Pi lifecycle; tokens redacted), `logs/zoom-transcript-success.jsonl` (completed ledger).
+
+## 2. Recording downloads (API client)
+
+- `src/zoomOAuth.mjs` — user-OAuth exchange/refresh plus an authenticated `api.zoom.us` helper. Tokens persist in `ZOOM_OAUTH_STORE_PATH` (default `./data/zoom-oauth.json`, mode `0600`).
+- `src/oauthCallback.mjs` — `GET /zoom/oauth` exchanges the `code` Zoom redirects back and stores tokens. Served on the same callback listener (reached via tunnel).
+- `scripts/zoom-download.mjs` — resolves the user, lists recordings, downloads all files (video/audio/transcript/chat) for a meeting into `John's Stuff/Zoom/<date> <topic>/`.
+- To connect: open the Zoom authorize URL for the app, approve, Zoom redirects through the tunnel to `/zoom/oauth`. Auth codes expire in ~60s, so approve promptly after the route is live.
+
+## 3. Zoom app setup (do this on marketplace.zoom.us)
+
+- **Go to:** Zoom App Marketplace → Develop → Build App. **Type: General app** (unlisted keeps it private). It is the only type that supports *both* event subscriptions and the `cloud_recording` scopes — Server-to-Server OAuth cannot access recording files; webhook-only apps have no API credentials.
+- **OAuth redirect URL:** `https://rook-callbacks.arcturus-labs.com/zoom/oauth` (Zoom rejects `localhost`; must be public HTTPS).
+- **Event subscription:** enable, add `recording.transcript_completed`, endpoint URL `https://rook-callbacks.arcturus-labs.com/zoom/transcripts`. The Secret Token from this subscription → `ZOOM_WEBHOOK_SECRET`. The running server answers Zoom's `url_validation` automatically.
+- **Scopes** (plain `:read` variants; skip `:admin`/`:master` and all Delete scopes):
+  - `cloud_recording:read:list_user_recordings` — list recordings ("List all recordings").
+  - `cloud_recording:read:list_recording_files` — per-meeting file/download URLs ("Get meeting recordings").
+  - `cloud_recording:read:meeting_transcript` — transcript endpoint.
+  - `user:read`-family scope — resolve your own user for API calls.
+- **Activate** the app or tokens will not issue (`invalid_client`: "app has been disabled").
+
+## 4. Environment variables
+
+`.env` (gitignored) holds live values; `.env.example` is the audited list — update both together.
+
+| Variable | Purpose |
+|---|---|
+| `CALLBACK_HOST`, `CALLBACK_PORT` | webhook listener bind (default `127.0.0.1:8787`) |
+| `EVENTS_PORT`, `EVENTS_DATABASE_PATH` | local history UI + activity DB |
+| `ZOOM_WEBHOOK_SECRET` | HMAC verification of Zoom events (Secret Token from the event subscription) |
+| `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` | General app OAuth credentials for recording downloads |
+| `ZOOM_TOKEN_URL` | override, default `https://zoom.us/oauth/token` |
+| `ZOOM_REDIRECT_URI` | must match the app's OAuth redirect URL |
+| `ZOOM_OAUTH_STORE_PATH` | persisted user tokens, default `./data/zoom-oauth.json` |
+| `ZOOM_SUCCESS_LOG_PATH` | completed-transcript ledger |
+| `PI_CLI_PATH`, `PI_PATH_PREFIX`, `PI_MODEL`, `PI_SESSION_TITLE_PREFIX`, `PI_SKILLS_ROOT` | Pi executable, Obsidian CLI path, model pin, session naming, skills root |
+| `PI_TIMEOUT_MS`, `PI_IDLE_TIMEOUT_MS`, `PI_MAX_ATTEMPTS`, `PI_RETRY_DELAY_MS` | overall timeout, silence ceiling, retry attempts + backoff |
+| `PI_EXECUTION_LOG_PATH`, `PI_WORK_ROOT` | Pi lifecycle log, private job dirs |
+| `DEEPSEEK_API_KEY` | model provider key for Pi jobs |
+| `MAX_WEBHOOK_BODY_BYTES`, `MAX_WEBHOOK_AGE_SECONDS` | request validation limits |
+
+Retired: `ZOOM_ACCOUNT_ID` (Server-to-Server remnant; General user-OAuth does not use it — remove if present).
