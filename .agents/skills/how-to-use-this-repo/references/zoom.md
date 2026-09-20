@@ -11,6 +11,8 @@ run under one unified Zoom **General app**.
 
 Flow: `Zoom → POST /zoom/transcripts → Pi job → Peeps vault`.
 
+Public ingress is a Cloudflare tunnel (`dev-callbacks.arcturus-labs.com → http://127.0.0.1:8787`); the server itself binds loopback only and never knows its public hostname. If the tunnel is down or the Mac is asleep, Zoom retries briefly, then the event is missed — reprocessing happens via `manual-retry.mjs` once a transcript exists, or not at all.
+
 - `src/callback.mjs` — verifies the HMAC signature (`ZOOM_WEBHOOK_SECRET`), answers `endpoint.url_validation`, then hands `recording.transcript_completed` payloads to the retry runner. Acknowledges 202 before model work.
 - `src/zoom.mjs` — `transcriptDetails()` extracts meeting metadata plus the transcript `download_url` and temporary `download_token`.
 - `src/processor.mjs` — spawns Pi (`--print`, tools `bash,read,edit,write`) in a private job dir under `PI_WORK_ROOT`. Overall timeout `PI_TIMEOUT_MS`; idle watchdog `PI_IDLE_TIMEOUT_MS` (Pi emits nothing until done, so this must exceed the longest quiet stretch — large transcripts take minutes before first output). Success requires Pi to write `zoom-processing-result.json` with `status: completed`.
@@ -33,8 +35,21 @@ Flow: `Zoom → POST /zoom/transcripts → Pi job → Peeps vault`.
 
 - `src/zoomOAuth.mjs` — user-OAuth exchange/refresh plus an authenticated `api.zoom.us` helper. Tokens persist in `ZOOM_OAUTH_STORE_PATH` (default `./data/zoom-oauth.json`, mode `0600`).
 - `src/oauthCallback.mjs` — `GET /zoom/oauth` exchanges the `code` Zoom redirects back and stores tokens. Served on the same callback listener (reached via tunnel).
-- `scripts/zoom-download.mjs` — resolves the user, lists recordings, downloads all files (video/audio/transcript/chat) for a meeting into `John's Stuff/Zoom/<date> <topic>/`.
-- To connect: open the Zoom authorize URL for the app, approve, Zoom redirects through the tunnel to `/zoom/oauth`. Auth codes expire in ~60s, so approve promptly after the route is live.
+- To connect: open the Zoom authorize URL for the app (`https://zoom.us/oauth/authorize?response_type=code&client_id=<id>&redirect_uri=<uri)`), approve, Zoom redirects through the tunnel to `/zoom/oauth`. Auth codes expire in ~60s, so approve promptly after the route is live.
+
+### Listing meetings and assets
+
+`node scripts/zoom-list.mjs --from YYYY-MM-DD --to YYYY-MM-DD [--json]` — one row per recording file (date, topic, file type/recording type, size, status) across every meeting in range. Accepts both `--flag value` and `--flag=value`. Requires stored OAuth tokens; hits `/v2/users/me/recordings` then per-meeting `/v2/meetings/{id}/recordings`.
+
+### Downloading assets
+
+`node scripts/zoom-download.mjs --meeting <meetingId> [--dir <dest>] [--delete --yes]` — downloads every `completed` file (video/audio/transcript/chat/timeline/captions) into `John's Stuff/Zoom/<date> - <topic>/` by default. `--delete` (requires `--yes`) deletes the cloud recording only after all files verify. Skips non-`completed` files.
+
+Batch learnings (Sep 2026, 23 meetings / 136 files / 12 GB):
+- Same `date - topic` repeats across meetings — disambiguate colliding folders with a `[meetingId]` suffix.
+- A meeting continued past midnight UTC appears under two dates with identical filenames; verify by meeting ID, not filename.
+- The flag parser accepts space- and equals-separated values; keep it that way in new scripts.
+- Failures to expect: flaky chunks on 100MB+ MP4s (re-run the meeting; completed files re-download idempotently), and the list endpoint defaulting to an empty range when `--from`/`--to` are malformed.
 
 ## 3. Zoom app setup (do this on marketplace.zoom.us)
 
@@ -62,10 +77,10 @@ Flow: `Zoom → POST /zoom/transcripts → Pi job → Peeps vault`.
 | `ZOOM_REDIRECT_URI` | must match the app's OAuth redirect URL |
 | `ZOOM_OAUTH_STORE_PATH` | persisted user tokens, default `./data/zoom-oauth.json` |
 | `ZOOM_SUCCESS_LOG_PATH` | completed-transcript ledger |
-| `PI_CLI_PATH`, `PI_PATH_PREFIX`, `PI_MODEL`, `PI_SESSION_TITLE_PREFIX`, `PI_SKILLS_ROOT` | Pi executable, Obsidian CLI path, model pin, session naming, skills root |
+| `PI_CLI_PATH`, `PI_MODEL`, `PI_SESSION_TITLE_PREFIX`, `PI_SKILLS_ROOT` | Pi executable, model pin, session naming, skills root |
 | `PI_TIMEOUT_MS`, `PI_IDLE_TIMEOUT_MS`, `PI_MAX_ATTEMPTS`, `PI_RETRY_DELAY_MS` | overall timeout, silence ceiling, retry attempts + backoff |
 | `PI_EXECUTION_LOG_PATH`, `PI_WORK_ROOT` | Pi lifecycle log, private job dirs |
 | `DEEPSEEK_API_KEY` | model provider key for Pi jobs |
 | `MAX_WEBHOOK_BODY_BYTES`, `MAX_WEBHOOK_AGE_SECONDS` | request validation limits |
 
-Retired: `ZOOM_ACCOUNT_ID` (Server-to-Server remnant; General user-OAuth does not use it — remove if present).
+Retired: `ZOOM_ACCOUNT_ID` (Server-to-Server remnant; General user-OAuth does not use it — remove if present). Retired: `PI_PATH_PREFIX` (removed Sep 2026; the processor preflights `obsidian` on PATH instead and fails fast with `OBSIDIAN_CLI_MISSING` — ensure the LaunchAgent PATH includes the Obsidian CLI directory).

@@ -43,8 +43,8 @@ Edit `.env`:
 
 - `ZOOM_WEBHOOK_SECRET` — Zoom's webhook secret token.
 - `PI_CLI_PATH` — Pi executable, defaulting to `pi`.
-- `PI_PATH_PREFIX` — directory prepended to Pi's `PATH`; defaults to the macOS Obsidian CLI directory.
 - `PI_MODEL` — optional Pi model ID. Leave blank to use Pi's configured default.
+- The processor preflights the `obsidian` CLI on `PATH` before spawning Pi and fails fast with `OBSIDIAN_CLI_MISSING` if absent — ensure the server environment (e.g. LaunchAgent `PATH`) includes the Obsidian CLI directory. (`PI_PATH_PREFIX` was removed Sep 2026.)
 - `PI_SKILLS_ROOT` — parent directory containing the required Peeps and Obsidian skills.
 - `PI_TIMEOUT_MS` — maximum time for one Pi job, defaulting to 10 minutes. A timeout is logged and terminates the job process group.
 - `PI_IDLE_TIMEOUT_MS` — maximum silence from a Pi job before it is treated as stalled, defaulting to 10 minutes. Pi emits no incremental output in non-interactive mode, so this must comfortably exceed the longest expected quiet stretch (large transcripts mean minutes before the first output).
