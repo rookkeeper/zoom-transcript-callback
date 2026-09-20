@@ -29,7 +29,6 @@ export function loadConfig() {
     eventsDatabasePath: process.env.EVENTS_DATABASE_PATH?.trim() || join(process.cwd(), 'data', 'events.sqlite'),
     zoomSecret: required("ZOOM_WEBHOOK_SECRET"),
     piCli: process.env.PI_CLI_PATH?.trim() || "pi",
-    piPathPrefix: process.env.PI_PATH_PREFIX?.trim() || "/Applications/Obsidian.app/Contents/MacOS",
     piModel: process.env.PI_MODEL?.trim() || "",
     piSkills: loadPiSkills(piSkillsRoot),
     piLogPath: process.env.PI_EXECUTION_LOG_PATH?.trim() || join(process.cwd(), "logs", "zoom-transcript-pi.jsonl"),
@@ -43,5 +42,10 @@ export function loadConfig() {
     promptTemplate: readPromptFile(promptPath),
     maxBodyBytes: Number.parseInt(process.env.MAX_WEBHOOK_BODY_BYTES ?? String(256 * 1024), 10),
     maxTimestampAgeSeconds: Number.parseInt(process.env.MAX_WEBHOOK_AGE_SECONDS ?? "300", 10),
+    zoomClientId: process.env.ZOOM_CLIENT_ID?.trim() || "",
+    zoomClientSecret: process.env.ZOOM_CLIENT_SECRET?.trim() || "",
+    zoomTokenUrl: process.env.ZOOM_TOKEN_URL?.trim() || "https://zoom.us/oauth/token",
+    zoomRedirectUri: process.env.ZOOM_REDIRECT_URI?.trim() || "https://dev-callbacks.arcturus-labs.com/zoom/oauth",
+    zoomOAuthStorePath: process.env.ZOOM_OAUTH_STORE_PATH?.trim() || join(process.cwd(), 'data', 'zoom-oauth.json'),
   };
 }

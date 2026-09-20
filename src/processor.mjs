@@ -1,7 +1,22 @@
 import { spawn as spawnProcess } from 'node:child_process';
+import { accessSync, constants } from 'node:fs';
 import { appendJsonLine, jobDirectory, piArgs, readCompletionMarker, redactPiOutput } from './pi.mjs';
 
-export function createProcessor(config, { spawn = spawnProcess, kill = (pid, signal) => process.kill(-pid, signal) } = {}) {
+export function resolveOnPath(candidates, env = process.env) {
+  const directories = (env.PATH ?? '').split(':').filter(Boolean);
+  for (const dir of directories) {
+    for (const name of candidates) {
+      const candidate = `${dir}/${name}`;
+      try {
+        accessSync(candidate, constants.X_OK);
+        return candidate;
+      } catch { /* not executable here */ }
+    }
+  }
+  return null;
+}
+
+export function createProcessor(config, { spawn = spawnProcess, kill = (pid, signal) => process.kill(-pid, signal), which = (names) => resolveOnPath(names) } = {}) {
   return (details, requestId) => new Promise((resolve, reject) => {
     const cwd = jobDirectory(config.piWorkRoot, requestId);
     const title = `${config.titlePrefix} · ${details.topic}`;
@@ -9,7 +24,13 @@ export function createProcessor(config, { spawn = spawnProcess, kill = (pid, sig
     const prompt = config.promptTemplate.replace(/{{([A-Za-z0-9]+)}}/g, (placeholder,name) => values[name] ?? placeholder);
     const context = { requestId, meetingUuid:details.meetingUuid, meetingId:details.meetingId, recordingFileId:details.recordingFileId };
     const log = (event, fields={}) => appendJsonLine(config.piLogPath, {event,...context,...fields});
-    log('pi_started',{title,cwd,model:config.piModel || 'default'});
+    const obsidianPath = which(['obsidian']);
+    if (!obsidianPath) {
+      const error = 'OBSIDIAN_CLI_MISSING: obsidian executable not found on PATH; check the server PATH includes the Obsidian CLI directory';
+      log('pi_failed',{error});
+      return resolve({status:'failed',error,metadata:{}});
+    }
+    log('pi_started',{title,cwd,model:config.piModel || 'default',obsidianPath});
     let child, timer, forceTimer, idleTimer, settled=false, timedOut=false, lastCommand='';
     const idleMs = Number.isFinite(config.piIdleTimeoutMs) ? config.piIdleTimeoutMs : Math.min(config.piTimeoutMs, 10 * 60 * 1000);
     const finish = (status,error,metadata={}) => {
@@ -34,7 +55,7 @@ export function createProcessor(config, { spawn = spawnProcess, kill = (pid, sig
     try {
       child=spawn(config.piCli,piArgs({model:config.piModel,skills:config.piSkills,title,prompt}),{
         detached:true,stdio:['ignore','pipe','pipe'],cwd,
-        env:{...process.env,PATH:[config.piPathPrefix,process.env.PATH].filter(Boolean).join(':')},
+        env:{...process.env},
       });
     } catch(error) { finish('failed','Pi could not start',{code:error.code || 'unknown'}); return; }
     armIdleTimer();
