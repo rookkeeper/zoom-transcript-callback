@@ -11,9 +11,12 @@ import { zoomApi } from "../src/zoomOAuth.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback = null) => {
-  const hit = args.find((arg) => arg === name || arg.startsWith(`${name}=`));
-  if (!hit) return fallback;
-  return hit.includes("=") ? hit.split("=").slice(1).join("=") : true;
+  const idx = args.findIndex((arg) => arg === name || arg.startsWith(`${name}=`));
+  if (idx === -1) return fallback;
+  const hit = args[idx];
+  if (hit.includes("=")) return hit.split("=").slice(1).join("=");
+  const next = args[idx + 1];
+  return next && !next.startsWith("--") ? next : true;
 };
 
 const meetingId = flag("--meeting");
