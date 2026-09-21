@@ -56,12 +56,22 @@ Batch learnings (Sep 2026, 23 meetings / 136 files / 12 GB):
 - **Go to:** Zoom App Marketplace → Develop → Build App. **Type: General app** (unlisted keeps it private). It is the only type that supports *both* event subscriptions and the `cloud_recording` scopes — Server-to-Server OAuth cannot access recording files; webhook-only apps have no API credentials.
 - **OAuth redirect URL:** `https://dev-callbacks.arcturus-labs.com/zoom/oauth` (Zoom rejects `localhost`; must be public HTTPS).
 - **Event subscription:** enable, add `recording.transcript_completed`, endpoint URL `https://dev-callbacks.arcturus-labs.com/zoom/transcripts`. The Secret Token from this subscription → `ZOOM_WEBHOOK_SECRET`. The running server answers Zoom's `url_validation` automatically.
-- **Scopes** (plain `:read` variants; skip `:admin`/`:master` and all Delete scopes):
-  - `cloud_recording:read:list_user_recordings` — list recordings ("List all recordings").
-  - `cloud_recording:read:list_recording_files` — per-meeting file/download URLs ("Get meeting recordings").
-  - `cloud_recording:read:meeting_transcript` — transcript endpoint.
-  - `user:read`-family scope — resolve your own user for API calls.
+- **Scopes.** Take plain variants where offered; skip `:admin`/`:master` unless the endpoint demands it. Current set with reasons:
+  | Scope | Why |
+  |---|---|
+  | `cloud_recording:read:list_user_recordings` | list meetings ("List all recordings") |
+  | `cloud_recording:read:list_recording_files` | per-meeting file/download URLs ("Get meeting recordings") |
+  | `cloud_recording:read:recording` | read recording details |
+  | `cloud_recording:read:meeting_transcript` | transcript endpoint |
+  | `cloud_recording:delete:recording_file` | trash one video/audio file without touching the rest |
+  | `cloud_recording:delete:meeting_recording` | whole-meeting delete (kept as fallback; prefer per-file) |
+  | `user:read:user` | resolve your own user for API calls |
+  | `user:read:settings`, `user:read:list_schedulers` | granted with the user family; not directly used |
 - **Activate** the app or tokens will not issue (`invalid_client`: "app has been disabled").
+
+### Approval (user OAuth) flow
+
+General apps authorize per user, not per account. The agent builds the authorize URL from `ZOOM_CLIENT_ID` + `ZOOM_REDIRECT_URI` and opens it (`open "https://zoom.us/oauth/authorize?response_type=code&client_id=<id>&redirect_uri=<uri>"`). John clicks **Allow**; Zoom redirects through the tunnel to `GET /zoom/oauth?code=...`; the server exchanges the code and stores tokens in `ZOOM_OAUTH_STORE_PATH`. Codes expire in ~60s, so the route must be deployed *before* opening the URL. Adding a scope later requires re-approval via the same URL — new tokens overwrite the store. Verify granted scopes with `python3 -c "import json; print(json.load(open('data/zoom-oauth.json'))['scope'])"` before using a new capability.
 
 ## 4. Environment variables
 
