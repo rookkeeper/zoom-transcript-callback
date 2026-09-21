@@ -107,7 +107,7 @@ Then, in order, stopping at the first answer:
 
 1. **Error self-explanatory?** `OBSIDIAN_CLI_MISSING`, `Invalid signature`, and `Pi timed out` diagnose themselves. Pairs 60s apart with `retryOf` metadata are original + auto-retry — check whether the retry is even capable of helping (it cannot fix missing binaries or bad signatures).
 2. **Needs Pi forensics?** `grep <requestId-prefix> logs/zoom-transcript-pi.jsonl` — full stdout/stderr per attempt. Only needed for stalls and unclear exits.
-3. **Did Peeps get updated?** `ls -t` the vault root — a missing dated event note means nothing was processed. A complete event has: summary, key themes, action items, full `# Transcript` appendix matching the source, and `## Log` links on *both* John's note and the participant's note.
+3. **Did Peeps get updated?** `ls -t` the vault root — a missing dated event note means nothing was processed. For what counts as complete, defer to the Peeps skill itself (it defines the event format, appendix rules, and log-link requirements) — do not restate that format here.
 4. **Do the assets exist?** `zoom-list.mjs` for cloud ground truth; `John's Stuff/Zoom/` for local copies.
 
 Common signatures: `OBSIDIAN_CLI_MISSING` → server process predates the LaunchAgent PATH edit (check with `ps -o etime= -p <pid>`); `Invalid signature` on a `Callback received` row → unsigned probe, normal noise; `Pi stalled with no output` → slow first token on a large transcript, retry usually recovers.
