@@ -94,3 +94,20 @@ General apps authorize per user, not per account. The agent builds the authorize
 | `MAX_WEBHOOK_BODY_BYTES`, `MAX_WEBHOOK_AGE_SECONDS` | request validation limits |
 
 Retired: `ZOOM_ACCOUNT_ID` (Server-to-Server remnant; General user-OAuth does not use it — remove if present). Retired: `PI_PATH_PREFIX` (removed Sep 2026; the processor preflights `obsidian` on PATH instead and fails fast with `OBSIDIAN_CLI_MISSING` — ensure the LaunchAgent PATH includes the Obsidian CLI directory).
+
+## 5. Reviewing meetings and debugging failures
+
+Fastest path first — query the ledger directly (the `:8788` UI shows the same data, slower):
+
+```bash
+sqlite3 data/events.sqlite "SELECT title, receivedAt, status, substr(error,1,100) FROM activities ORDER BY receivedAt DESC LIMIT 10;"
+```
+
+Then, in order, stopping at the first answer:
+
+1. **Error self-explanatory?** `OBSIDIAN_CLI_MISSING`, `Invalid signature`, and `Pi timed out` diagnose themselves. Pairs 60s apart with `retryOf` metadata are original + auto-retry — check whether the retry is even capable of helping (it cannot fix missing binaries or bad signatures).
+2. **Needs Pi forensics?** `grep <requestId-prefix> logs/zoom-transcript-pi.jsonl` — full stdout/stderr per attempt. Only needed for stalls and unclear exits.
+3. **Did Peeps get updated?** `ls -t` the vault root — a missing dated event note means nothing was processed. A complete event has: summary, key themes, action items, full `# Transcript` appendix matching the source, and `## Log` links on *both* John's note and the participant's note.
+4. **Do the assets exist?** `zoom-list.mjs` for cloud ground truth; `John's Stuff/Zoom/` for local copies.
+
+Common signatures: `OBSIDIAN_CLI_MISSING` → server process predates the LaunchAgent PATH edit (check with `ps -o etime= -p <pid>`); `Invalid signature` on a `Callback received` row → unsigned probe, normal noise; `Pi stalled with no output` → slow first token on a large transcript, retry usually recovers.

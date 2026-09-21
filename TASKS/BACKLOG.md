@@ -1,4 +1,6 @@
 - [ ] Make another endpoint for Zoom meetings where right after the meeting ends then I can just paste in my notes and kind of shape what the agent emphasizes in the meeting notes it creates.
+  - [ ] OR Just make it read the meeting notes, and just remember at the end of the meeting to paste in the notes every time.
+- [ ] Take a screenshot from the meeting at a time when the other person is talking and post it.
 - [ ] Currently callback points to dev-callbacks.arcturus-labs.com on my personal laptop. Make it point to callbacks.arcturus-labs.com on my side server. - John needs to do most of this, but the agent can guide
   - [ ] Need to make Obsidian sync available on bustedscreen
   - [ ] Need to point Cloudflare callbacks.arcturus-labs.com to bustedscreen
@@ -9,3 +11,4 @@
   - [ ] Update website to use new endpoint callbacks.arcturus-labs.com/website/contact-form 
   - [ ] Rename and move this repo 
   - [ ] Delete form repo 
+
