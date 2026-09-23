@@ -84,3 +84,17 @@ test('Pi processor resets the idle watchdog on child output', async t => {
   const result=await pending;
   assert.equal(result.status,'succeeded');
 });
+
+test('renders callback data into the internal prompt', async t => {
+  const root=mkdtempSync(join(tmpdir(),'processor-callback-data-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],repoSkillDirectory:'/repo/.agents/skills/how-to-use-this-repo',piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{repoSkillDirectory}}\\n{{callbackData}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:10000,piIdleTimeoutMs:5000};
+  const child=new EventEmitter(); child.stdout=new EventEmitter(); child.stderr=new EventEmitter(); child.pid=654;
+  let prompt='';
+  const spawn=(_cmd,args,options)=>{prompt=args.at(-1);writeFileSync(join(options.cwd,'zoom-processing-result.json'),JSON.stringify({status:'completed',summary:'Done'}));setImmediate(()=>child.emit('close',0,null));return child;};
+  const processor=createProcessor(config,{spawn,which:()=>'/usr/local/bin/obsidian'});
+  const result=await processor({topic:'Meeting',meetingId:'42',downloadUrl:'https://example.test/transcript',downloadToken:'secret'},'job');
+  assert.equal(result.status,'succeeded');
+  assert.match(prompt,/how-to-use-this-repo/);
+  assert.match(prompt,/"meetingId": "42"/);
+  assert.match(prompt,/example\.test\/transcript/);
+});

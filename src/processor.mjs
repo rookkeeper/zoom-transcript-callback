@@ -25,6 +25,7 @@ export function createProcessor(config, { spawn = spawnProcess, kill = (pid, sig
       jobDirectory: cwd,
       peepsSkillDirectory: config.piSkills[0],
       repoSkillDirectory: config.repoSkillDirectory,
+      callbackData: JSON.stringify({ ...details, jobDirectory: cwd }, null, 2),
     };
     const prompt = config.promptTemplate.replace(/{{([A-Za-z0-9]+)}}/g, (placeholder,name) => values[name] ?? placeholder);
     const context = { requestId, meetingUuid:details.meetingUuid, meetingId:details.meetingId, recordingFileId:details.recordingFileId };

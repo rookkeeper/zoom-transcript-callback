@@ -151,8 +151,19 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 - **Endpoint:** `https://dev-callbacks.arcturus-labs.com/zoom/transcripts` forwards to local `POST /zoom/transcripts`.
 - **Verification:** `src/callback.mjs` verifies Zoom's HMAC signature and timestamp using `ZOOM_WEBHOOK_SECRET`. It answers `endpoint.url_validation` and returns `202` before model work.
 - **Processing:** `src/zoom.mjs` extracts meeting metadata, the transcript download URL, and temporary download token. `src/retry.mjs` runs the Pi processor, retrying post-spawn failures according to `PI_MAX_ATTEMPTS` and `PI_RETRY_DELAY_MS`.
-- **Pi work:** `src/processor.mjs` starts Pi in an isolated directory under `PI_WORK_ROOT`; the prompt is hardwired in `src/zoomPrompt.mjs`. It tells Pi to read this repository skill and this Zoom reference, download/validate the VTT, process the meeting, append the original transcript, verify the appendix, and write `zoom-processing-result.json` with `status: completed`.
-- **Transcript callback instruction:** When a `recording.transcript_completed` callback arrives, take the transcript and update the Peeps Obsidian vault. Use the `how-to-use-peeps-obsidian` skill to create a new event document for the meeting, then update existing participant files or create new person files as that skill describes. The event summary should cover the meeting and all participants; the Peeps skill's large-meeting LinkedIn limit still applies.
+- **Pi work:** `src/processor.mjs` starts Pi in an isolated directory under `PI_WORK_ROOT`; the prompt is hardwired in `src/zoomPrompt.mjs` and only identifies the callback, supplies callback data, and points Pi to this skill and the loaded skills.
+- **Transcript callback workflow:** When a `recording.transcript_completed` callback arrives:
+  1. Use the callback data to download the transcript into the job directory as `zoom-transcript.vtt`:
+     ```bash
+     curl --fail --show-error --location --max-time 120 --request GET '<downloadUrl>' \\
+       --header 'Authorization: Bearer <downloadToken>' \\
+       --output './zoom-transcript.vtt'
+     ```
+     If a non-empty VTT already exists, validate and reuse it. Do not download or process audio/video files for this callback.
+  2. Use the `how-to-use-peeps-obsidian` skill to create a new event document for the meeting.
+  3. Update existing participant files or create new person files as that skill describes. The event summary must incorporate information from all participants; the Peeps skill's large-meeting LinkedIn limit still applies.
+  4. Append and verify the original transcript using the Peeps skill's script.
+  5. Only after every required step succeeds, write `zoom-processing-result.json` with `status: completed`.
 - **Downstream skill:** For the Obsidian updates, Pi must use the `how-to-use-peeps-obsidian` skill. That skill governs person searches, event-note creation, participant links, log entries, and transcript-appending rules. Do not duplicate its detailed note-format rules here.
 - **Success evidence:** A completed marker, a successful activity row, and an entry in `logs/zoom-transcript-success.jsonl`.
 - **Failure evidence:** `data/events.sqlite` records the activity; `logs/zoom-transcript-pi.jsonl` records Pi lifecycle output with tokens redacted. Failed jobs can be retried with `manual-retry.mjs`.
