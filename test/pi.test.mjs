@@ -14,6 +14,22 @@ test("loads the Peeps and general Obsidian skills", () => {
   assert.deepEqual(loadPiSkills(root), [join(root, "how-to-use-peeps-obsidian"), join(root, "obsidian-general-usage")]);
 });
 
+test("loads the repository skill when provided", () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-skills-repo-"));
+  for (const name of ["how-to-use-peeps-obsidian", "obsidian-general-usage"]) {
+    mkdirSync(join(root, name));
+    writeFileSync(join(root, name, "SKILL.md"), "# Skill\n");
+  }
+  const repoSkill = join(root, "how-to-use-this-repo");
+  mkdirSync(repoSkill);
+  writeFileSync(join(repoSkill, "SKILL.md"), "# Repo skill\n");
+  assert.deepEqual(loadPiSkills(root, repoSkill), [
+    join(root, "how-to-use-peeps-obsidian"),
+    join(root, "obsidian-general-usage"),
+    repoSkill,
+  ]);
+});
+
 test("builds an unattended Pi command with explicit skills", () => {
   const args = piArgs({ model: "anthropic/claude-sonnet", skills: ["/skills/peeps", "/skills/obsidian"], title: "Zoom transcript · Demo", prompt: "Process this transcript" });
   assert.deepEqual(args, ["--print", "--thinking", "off", "--no-extensions", "--no-skills", "--no-context-files", "--tools", "bash,read,edit,write", "--name", "Zoom transcript · Demo", "--skill", "/skills/peeps", "--skill", "/skills/obsidian", "--model", "anthropic/claude-sonnet", "Process this transcript"]);

@@ -1,11 +1,8 @@
-import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import process from "node:process";
+import { ZOOM_TRANSCRIPT_PROMPT } from "./zoomPrompt.mjs";
 import { loadPiSkills } from "./pi.mjs";
-
-const promptPath = fileURLToPath(new URL("../prompts/zoom-transcript.md", import.meta.url));
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -13,14 +10,9 @@ function required(name) {
   return value;
 }
 
-export function readPromptFile(filePath) {
-  const source = readFileSync(filePath, "utf8");
-  const prompt = source.replace(/<!--[\s\S]*?-->/g, "").trim();
-  if (!prompt) throw new Error(`Prompt file is empty: ${filePath}`);
-  return prompt;
-}
-
 export function loadConfig() {
+  const repoRoot = process.cwd();
+  const repoSkillDirectory = join(repoRoot, ".agents", "skills", "how-to-use-this-repo");
   const piSkillsRoot = process.env.PI_SKILLS_ROOT?.trim() || "/Users/johnberryman/projects/github/JnBrymn/agent-skills/skills";
   return {
     host: process.env.CALLBACK_HOST?.trim() || "127.0.0.1",
@@ -30,7 +22,8 @@ export function loadConfig() {
     zoomSecret: required("ZOOM_WEBHOOK_SECRET"),
     piCli: process.env.PI_CLI_PATH?.trim() || "pi",
     piModel: process.env.PI_MODEL?.trim() || "",
-    piSkills: loadPiSkills(piSkillsRoot),
+    piSkills: loadPiSkills(piSkillsRoot, repoSkillDirectory),
+    repoSkillDirectory,
     piLogPath: process.env.PI_EXECUTION_LOG_PATH?.trim() || join(process.cwd(), "logs", "zoom-transcript-pi.jsonl"),
     successLogPath: process.env.ZOOM_SUCCESS_LOG_PATH?.trim() || join(process.cwd(), "logs", "zoom-transcript-success.jsonl"),
     piWorkRoot: process.env.PI_WORK_ROOT?.trim() || join(tmpdir(), "zoom-transcript-callback"),
@@ -39,7 +32,7 @@ export function loadConfig() {
     piMaxAttempts: Math.max(1, Number.parseInt(process.env.PI_MAX_ATTEMPTS ?? "2", 10) || 2),
     piRetryDelayMs: Math.max(0, Number.parseInt(process.env.PI_RETRY_DELAY_MS ?? String(60 * 1000), 10) || 0),
     titlePrefix: process.env.PI_SESSION_TITLE_PREFIX?.trim() || "Zoom transcript",
-    promptTemplate: readPromptFile(promptPath),
+    promptTemplate: ZOOM_TRANSCRIPT_PROMPT,
     maxBodyBytes: Number.parseInt(process.env.MAX_WEBHOOK_BODY_BYTES ?? String(256 * 1024), 10),
     maxTimestampAgeSeconds: Number.parseInt(process.env.MAX_WEBHOOK_AGE_SECONDS ?? "300", 10),
     zoomClientId: process.env.ZOOM_CLIENT_ID?.trim() || "",

@@ -20,7 +20,12 @@ export function createProcessor(config, { spawn = spawnProcess, kill = (pid, sig
   return (details, requestId) => new Promise((resolve, reject) => {
     const cwd = jobDirectory(config.piWorkRoot, requestId);
     const title = `${config.titlePrefix} · ${details.topic}`;
-    const values = { ...details, jobDirectory:cwd, peepsSkillDirectory:config.piSkills[0] };
+    const values = {
+      ...details,
+      jobDirectory: cwd,
+      peepsSkillDirectory: config.piSkills[0],
+      repoSkillDirectory: config.repoSkillDirectory,
+    };
     const prompt = config.promptTemplate.replace(/{{([A-Za-z0-9]+)}}/g, (placeholder,name) => values[name] ?? placeholder);
     const context = { requestId, meetingUuid:details.meetingUuid, meetingId:details.meetingId, recordingFileId:details.recordingFileId };
     const log = (event, fields={}) => appendJsonLine(config.piLogPath, {event,...context,...fields});

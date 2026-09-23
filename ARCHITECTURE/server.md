@@ -7,7 +7,7 @@ Request flow: HTTP adapter → activity service → repository → SQLite. Pi ex
 | Module / interface | Inputs → result | Responsibility |
 |---|---|---|
 | `config.loadConfig()` | environment → config | Ports, paths, limits, Zoom secret, Pi settings and prompt |
-| `config.readPromptFile(path)` | path → string | Loads prompt without documentation comments |
+| `zoomPrompt.ZOOM_TRANSCRIPT_PROMPT` | template string | Internal Zoom transcript-processing instructions |
 | `application.createApplication(config, service, processor)` | dependencies → `{callback, admin}` HTTP servers | Creates unbound, separately testable listeners |
 | `index.mjs` | config → running process | Opens storage, recovers interrupted work, listens, drains jobs on ordinary shutdown |
 
@@ -39,7 +39,7 @@ Receipt can finish without processing (validation, rejection, unsupported event)
 
 `processor.createProcessor(config, {spawn?, kill?}?) -> (details, requestId) -> Promise<{status, error, metadata}>`: creates a private working directory, renders the prompt, starts Pi, logs output, enforces timeout, and checks the completion marker. Only a valid completed marker after exit zero writes the append-only success ledger. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
 
-`pi.mjs`: `loadPiSkills(root) -> paths[]`; `piArgs({model,skills,title,prompt}) -> string[]`; `jobDirectory(root,id) -> path`; `appendJsonLine(path,entry) -> void`; `readCompletionMarker(directory) -> object|null`; `redactPiOutput(text,token) -> string`.
+`pi.mjs`: `loadPiSkills(root,repoSkillDirectory) -> paths[]`; `piArgs({model,skills,title,prompt}) -> string[]`; `jobDirectory(root,id) -> path`; `appendJsonLine(path,entry) -> void`; `readCompletionMarker(directory) -> object|null`; `redactPiOutput(text,token) -> string`.
 
 `zoom.mjs`: `zoomSignature(secret,timestamp,body) -> string`; `verifyZoomSignature({secret,timestamp,signature,rawBody,nowSeconds?,maxAgeSeconds?}) -> boolean`; `validationResponse(secret,token) -> object`; `transcriptDetails(payload) -> selected fields`, including credentials used only by the processor.
 

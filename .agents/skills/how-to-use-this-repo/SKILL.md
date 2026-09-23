@@ -42,7 +42,7 @@ Route requests to the matching section:
 
 - `src/` — server source (`callback.mjs`, `processor.mjs`, `pi.mjs`, `retry.mjs`, `zoom.mjs`, `zoomOAuth.mjs`, `oauthCallback.mjs`, `config.mjs`, …).
 - `test/` — `node:test` suites mirroring `src/`; run with `npm test`.
-- `prompts/` — the Pi instruction templates. `zoom-transcript.md` is the live prompt (HTML comments stripped at load); `zoom-transcript.example.md` documents every `{{placeholder}}`.
+- `src/zoomPrompt.mjs` — the internal Pi transcript-processing prompt and its `{{placeholder}}` contract.
 - `scripts/` — `run-server.sh` (start/restart), `manual-retry.mjs` (re-run a failed job), `send-fake-request.sh` (signed local test), `zoom-download.mjs` (pull recording assets via API).
 - `ui/` — local history screen served on the events port (`/events`).
 - `ARCHITECTURE/` — server, database, UI design notes. `PRODUCT/overview.md` — product intent.

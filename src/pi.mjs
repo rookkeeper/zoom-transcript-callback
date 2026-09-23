@@ -3,8 +3,9 @@ import { dirname, join } from "node:path";
 
 const REQUIRED_SKILLS = ["how-to-use-peeps-obsidian", "obsidian-general-usage"];
 
-export function loadPiSkills(skillsRoot) {
+export function loadPiSkills(skillsRoot, repoSkillDirectory = null) {
   const skills = REQUIRED_SKILLS.map((name) => join(skillsRoot, name));
+  if (repoSkillDirectory) skills.push(repoSkillDirectory);
   for (const skill of skills) {
     if (!existsSync(join(skill, "SKILL.md"))) throw new Error(`Missing Pi skill: ${skill}`);
   }
