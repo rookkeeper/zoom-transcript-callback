@@ -1,113 +1,198 @@
 # Zoom integration
 
-> **Path reminder:** paths here are relative to the repo root
+> **Path reminder:** paths in this reference are relative to the repo root
 > (`.../zoom-transcript-callback/`).
 
-Two halves: (1) the **callback** — Zoom pushes an event, Pi processes the
-meeting; (2) the **API client** — we pull recording assets on demand. Both
-run under one unified Zoom **General app**.
+Use this reference for Zoom setup, recording operations, callbacks, transcript processing, and failure recovery. Both the callback and API client use one unified Zoom **General app**.
 
-## 1. Meeting processing (callback)
+## General facts
 
-Flow: `Zoom → POST /zoom/transcripts → Pi job → Peeps vault`.
+- **Repository:** `/Users/johnberryman/projects/github/rookkeeper/zoom-transcript-callback`
+- **Zoom app management:** [https://marketplace.zoom.us/user/build](https://marketplace.zoom.us/user/build)
+- **Current General-app authorization URL:**
+  ```text
+  https://zoom.us/oauth/authorize?response_type=code&client_id=Bxu8tCqbQdeUqCaOV39aZA&redirect_uri=https://dev-callbacks.arcturus-labs.com/zoom/oauth
+  ```
+- **Public callback endpoint:** `https://dev-callbacks.arcturus-labs.com/zoom/transcripts`
+- **Public OAuth redirect:** `https://dev-callbacks.arcturus-labs.com/zoom/oauth`
+- **Local callback listener:** `http://127.0.0.1:8787/zoom/transcripts`
+- **Local history UI:** [http://127.0.0.1:8788/events](http://127.0.0.1:8788/events)
+- **Durable reminder:** use the current authorization URL when scopes change and the app must be reauthorized. Authorization codes expire quickly, so the callback route must be live before opening it.
+- **Durable reminder:** the public hostname belongs to the Cloudflare tunnel; the server itself binds to loopback and does not know its public hostname.
 
-Public ingress is a Cloudflare tunnel (`dev-callbacks.arcturus-labs.com → http://127.0.0.1:8787`); the server itself binds loopback only and never knows its public hostname. If the tunnel is down or the Mac is asleep, Zoom retries briefly, then the event is missed — reprocessing happens via `manual-retry.mjs` once a transcript exists, or not at all.
+## Setup and configuration
 
-- `src/callback.mjs` — verifies the HMAC signature (`ZOOM_WEBHOOK_SECRET`), answers `endpoint.url_validation`, then hands `recording.transcript_completed` payloads to the retry runner. Acknowledges 202 before model work.
-- `src/zoom.mjs` — `transcriptDetails()` extracts meeting metadata plus the transcript `download_url` and temporary `download_token`.
-- `src/processor.mjs` — spawns Pi (`--print`, tools `bash,read,edit,write`) in a private job dir under `PI_WORK_ROOT`. Overall timeout `PI_TIMEOUT_MS`; idle watchdog `PI_IDLE_TIMEOUT_MS` (Pi emits nothing until done, so this must exceed the longest quiet stretch — large transcripts take minutes before first output). Success requires Pi to write `zoom-processing-result.json` with `status: completed`.
-- `src/retry.mjs` — `runTranscriptJob()` retries post-spawn failures (`PI_MAX_ATTEMPTS`, default 2; `PI_RETRY_DELAY_MS` backoff, default 60s). Each attempt is a fresh activity row linked via `retryOf`. Pre-spawn failures ("Pi could not start") are not retried.
-- `src/pi.mjs` — Pi arg construction, required skills (`how-to-use-peeps-obsidian`, `obsidian-general-usage` from `PI_SKILLS_ROOT`), token redaction in logs.
+### Zoom app
 
-### Where the Pi instructions live
+- Go to [the created-apps page](https://marketplace.zoom.us/user/build).
+- Use one **General app**. It is unlisted/private during development.
+- A General app is required here because this integration needs both event subscriptions and `cloud_recording` API scopes. Server-to-Server OAuth cannot access the recording files, and webhook-only apps do not provide the required API credentials.
+- OAuth redirect URL: `https://dev-callbacks.arcturus-labs.com/zoom/oauth`.
+- Enable Event Subscriptions and add `recording.transcript_completed` with endpoint `https://dev-callbacks.arcturus-labs.com/zoom/transcripts`.
+- Put the event-subscription Secret Token in `ZOOM_WEBHOOK_SECRET`.
+- Activate the app or tokens will not issue (`invalid_client`: "app has been disabled").
 
-`prompts/zoom-transcript.md` is the live prompt. It tells Pi to: download the transcript to `./zoom-transcript.vtt` (reusing a valid existing file), follow the Peeps skill to create/update person and `#event` notes, append the transcript via the skill's `append_transcript.py` script, verify the appendix, then write the completion marker. `{{placeholders}}` are filled from the webhook payload; see `prompts/zoom-transcript.example.md` for the full list. **Edit the `.md` to change Pi's behavior** — HTML comments are stripped at load, so they are safe for developer notes.
+### Scopes
 
-### Operating it
+Take plain variants where offered; skip `:admin`/`:master` unless an endpoint demands them.
 
-- Start/restart: `./scripts/run-server.sh` (loads `.env`, kills the old listener, `npm start`). Production runs under a LaunchAgent; see README "Start automatically on macOS".
-- History UI: `http://127.0.0.1:8788/events` (local only).
-- Failed job? `node scripts/manual-retry.mjs <activityId>` re-runs with a fresh row, reusing the downloaded VTT.
-- Test locally: `./scripts/send-fake-request.sh validation|transcript`.
-- Evidence: `data/events.sqlite` (activity ledger), `logs/zoom-transcript-pi.jsonl` (Pi lifecycle; tokens redacted), `logs/zoom-transcript-success.jsonl` (completed ledger).
+| Scope | Why |
+|---|---|
+| `cloud_recording:read:list_user_recordings` | list meetings ("List all recordings") |
+| `cloud_recording:read:list_recording_files` | per-meeting file/download URLs ("Get meeting recordings") |
+| `cloud_recording:read:recording` | read recording details |
+| `cloud_recording:read:meeting_transcript` | transcript endpoint |
+| `cloud_recording:delete:recording_file` | trash one video/audio file without touching the rest |
+| `cloud_recording:delete:meeting_recording` | whole-meeting delete; retained as a fallback, but prefer per-file deletion |
+| `user:read:user` | resolve the current user for API calls |
+| `user:read:settings`, `user:read:list_schedulers` | granted with the user family; not directly used |
 
-## 2. Recording downloads (API client)
+### User OAuth
 
-- `src/zoomOAuth.mjs` — user-OAuth exchange/refresh plus an authenticated `api.zoom.us` helper. Tokens persist in `ZOOM_OAUTH_STORE_PATH` (default `./data/zoom-oauth.json`, mode `0600`).
-- `src/oauthCallback.mjs` — `GET /zoom/oauth` exchanges the `code` Zoom redirects back and stores tokens. Served on the same callback listener (reached via tunnel).
-- To connect: open the Zoom authorize URL for the app (`https://zoom.us/oauth/authorize?response_type=code&client_id=<id>&redirect_uri=<uri)`), approve, Zoom redirects through the tunnel to `/zoom/oauth`. Auth codes expire in ~60s, so approve promptly after the route is live.
+General apps authorize per user, not per account. Open the current authorization URL above, click **Allow**, and Zoom redirects through the tunnel to `GET /zoom/oauth?code=...`. The server exchanges the code and stores the refresh token in `ZOOM_OAUTH_STORE_PATH`.
 
-### Listing meetings and assets
+Adding a scope later requires reauthorization with the same URL; new tokens overwrite the stored token. Verify granted scopes with:
 
-`node scripts/zoom-list.mjs --from YYYY-MM-DD --to YYYY-MM-DD [--json]` — one row per recording file (date, topic, file type/recording type, size, status) across every meeting in range. Accepts both `--flag value` and `--flag=value`. Requires stored OAuth tokens; hits `/v2/users/me/recordings` then per-meeting `/v2/meetings/{id}/recordings`.
+```bash
+python3 -c "import json; print(json.load(open('data/zoom-oauth.json'))['scope'])"
+```
 
-### Downloading assets
+### Environment variables
 
-`node scripts/zoom-download.mjs --meeting <meetingId> [--dir <dest>] [--delete --yes]` — downloads every `completed` file (video/audio/transcript/chat/timeline/captions) into `John's Stuff/Zoom/<date> - <topic>/` by default. `--delete` (requires `--yes`) deletes the cloud recording only after all files verify. Skips non-`completed` files.
-
-Batch learnings (Sep 2026, 23 meetings / 136 files / 12 GB):
-- Same `date - topic` repeats across meetings — disambiguate colliding folders with a `[meetingId]` suffix.
-- A meeting continued past midnight UTC appears under two dates with identical filenames; verify by meeting ID, not filename.
-- The flag parser accepts space- and equals-separated values; keep it that way in new scripts.
-- Failures to expect: flaky chunks on 100MB+ MP4s (re-run the meeting; completed files re-download idempotently), and the list endpoint defaulting to an empty range when `--from`/`--to` are malformed.
-
-## 3. Zoom app setup (do this on marketplace.zoom.us)
-
-- **Go to:** Zoom App Marketplace → Develop → Build App. **Type: General app** (unlisted keeps it private). It is the only type that supports *both* event subscriptions and the `cloud_recording` scopes — Server-to-Server OAuth cannot access recording files; webhook-only apps have no API credentials.
-- **OAuth redirect URL:** `https://dev-callbacks.arcturus-labs.com/zoom/oauth` (Zoom rejects `localhost`; must be public HTTPS).
-- **Event subscription:** enable, add `recording.transcript_completed`, endpoint URL `https://dev-callbacks.arcturus-labs.com/zoom/transcripts`. The Secret Token from this subscription → `ZOOM_WEBHOOK_SECRET`. The running server answers Zoom's `url_validation` automatically.
-- **Scopes.** Take plain variants where offered; skip `:admin`/`:master` unless the endpoint demands it. Current set with reasons:
-  | Scope | Why |
-  |---|---|
-  | `cloud_recording:read:list_user_recordings` | list meetings ("List all recordings") |
-  | `cloud_recording:read:list_recording_files` | per-meeting file/download URLs ("Get meeting recordings") |
-  | `cloud_recording:read:recording` | read recording details |
-  | `cloud_recording:read:meeting_transcript` | transcript endpoint |
-  | `cloud_recording:delete:recording_file` | trash one video/audio file without touching the rest |
-  | `cloud_recording:delete:meeting_recording` | whole-meeting delete (kept as fallback; prefer per-file) |
-  | `user:read:user` | resolve your own user for API calls |
-  | `user:read:settings`, `user:read:list_schedulers` | granted with the user family; not directly used |
-- **Activate** the app or tokens will not issue (`invalid_client`: "app has been disabled").
-
-### Approval (user OAuth) flow
-
-General apps authorize per user, not per account. The agent builds the authorize URL from `ZOOM_CLIENT_ID` + `ZOOM_REDIRECT_URI` and opens it (`open "https://zoom.us/oauth/authorize?response_type=code&client_id=<id>&redirect_uri=<uri>"`). John clicks **Allow**; Zoom redirects through the tunnel to `GET /zoom/oauth?code=...`; the server exchanges the code and stores tokens in `ZOOM_OAUTH_STORE_PATH`. Codes expire in ~60s, so the route must be deployed *before* opening the URL. Adding a scope later requires re-approval via the same URL — new tokens overwrite the store. Verify granted scopes with `python3 -c "import json; print(json.load(open('data/zoom-oauth.json'))['scope'])"` before using a new capability.
-
-## 4. Environment variables
-
-`.env` (gitignored) holds live values; `.env.example` is the audited list — update both together.
+`.env` (gitignored) holds live values; `.env.example` is the audited list and must stay synchronized.
 
 | Variable | Purpose |
 |---|---|
-| `CALLBACK_HOST`, `CALLBACK_PORT` | webhook listener bind (default `127.0.0.1:8787`) |
-| `EVENTS_PORT`, `EVENTS_DATABASE_PATH` | local history UI + activity DB |
-| `ZOOM_WEBHOOK_SECRET` | HMAC verification of Zoom events (Secret Token from the event subscription) |
-| `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` | General app OAuth credentials for recording downloads |
-| `ZOOM_TOKEN_URL` | override, default `https://zoom.us/oauth/token` |
+| `CALLBACK_HOST`, `CALLBACK_PORT` | webhook listener bind; defaults to `127.0.0.1:8787` |
+| `EVENTS_PORT`, `EVENTS_DATABASE_PATH` | local history UI and activity database |
+| `ZOOM_WEBHOOK_SECRET` | HMAC verification of Zoom events |
+| `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` | General-app OAuth credentials for recording downloads |
+| `ZOOM_TOKEN_URL` | OAuth token endpoint; defaults to `https://zoom.us/oauth/token` |
 | `ZOOM_REDIRECT_URI` | must match the app's OAuth redirect URL |
-| `ZOOM_OAUTH_STORE_PATH` | persisted user tokens, default `./data/zoom-oauth.json` |
+| `ZOOM_OAUTH_STORE_PATH` | persisted user tokens; defaults to `./data/zoom-oauth.json` |
 | `ZOOM_SUCCESS_LOG_PATH` | completed-transcript ledger |
-| `PI_CLI_PATH`, `PI_MODEL`, `PI_SESSION_TITLE_PREFIX`, `PI_SKILLS_ROOT` | Pi executable, model pin, session naming, skills root |
-| `PI_TIMEOUT_MS`, `PI_IDLE_TIMEOUT_MS`, `PI_MAX_ATTEMPTS`, `PI_RETRY_DELAY_MS` | overall timeout, silence ceiling, retry attempts + backoff |
-| `PI_EXECUTION_LOG_PATH`, `PI_WORK_ROOT` | Pi lifecycle log, private job dirs |
+| `PI_CLI_PATH`, `PI_MODEL`, `PI_SESSION_TITLE_PREFIX`, `PI_SKILLS_ROOT` | Pi executable, model, session naming, and skill root |
+| `PI_TIMEOUT_MS`, `PI_IDLE_TIMEOUT_MS`, `PI_MAX_ATTEMPTS`, `PI_RETRY_DELAY_MS` | processing timeout, silence ceiling, retry attempts, and backoff |
+| `PI_EXECUTION_LOG_PATH`, `PI_WORK_ROOT` | Pi lifecycle log and private job directories |
 | `DEEPSEEK_API_KEY` | model provider key for Pi jobs |
 | `MAX_WEBHOOK_BODY_BYTES`, `MAX_WEBHOOK_AGE_SECONDS` | request validation limits |
 
-Retired: `ZOOM_ACCOUNT_ID` (Server-to-Server remnant; General user-OAuth does not use it — remove if present). Retired: `PI_PATH_PREFIX` (removed Sep 2026; the processor preflights `obsidian` on PATH instead and fails fast with `OBSIDIAN_CLI_MISSING` — ensure the LaunchAgent PATH includes the Obsidian CLI directory).
+Retired: `ZOOM_ACCOUNT_ID` (old Server-to-Server remnant; General user OAuth does not use it). Retired: `PI_PATH_PREFIX` (the processor now preflights `obsidian` on `PATH`).
 
-## 5. Reviewing meetings and debugging failures
+## Standard operating protocol
 
-Fastest path first — query the ledger directly (the `:8788` UI shows the same data, slower):
+These are the operations the agent can perform when the user asks about Zoom. Always confirm destructive operations immediately before execution, and never expose or log secrets, download tokens, transcript content, or client secrets.
 
-```bash
-sqlite3 data/events.sqlite "SELECT title, receivedAt, status, substr(error,1,100) FROM activities ORDER BY receivedAt DESC LIMIT 10;"
-```
+### Start or restart the callback server
 
-Then, in order, stopping at the first answer:
+- **User request:** "start the Zoom callback," "restart the Zoom app," or "bring the callback back up."
+- **Procedure:** From the repository root, run `./scripts/run-server.sh`. Production normally runs under the LaunchAgent `com.rookkeeper.zoom-transcript-callback`.
+- **Result:** The callback listens on port 8787 and the history UI on port 8788.
 
-1. **Error self-explanatory?** `OBSIDIAN_CLI_MISSING`, `Invalid signature`, and `Pi timed out` diagnose themselves. Pairs 60s apart with `retryOf` metadata are original + auto-retry — check whether the retry is even capable of helping (it cannot fix missing binaries or bad signatures).
-2. **Needs Pi forensics?** `grep <requestId-prefix> logs/zoom-transcript-pi.jsonl` — full stdout/stderr per attempt. Only needed for stalls and unclear exits.
-3. **Did Peeps get updated?** `ls -t` the vault root — a missing dated event note means nothing was processed. For what counts as complete, defer to the Peeps skill itself (it defines the event format, appendix rules, and log-link requirements) — do not restate that format here.
-4. **Do the assets exist?** `zoom-list.mjs` for cloud ground truth; `John's Stuff/Zoom/` for local copies.
+### Reauthorize the Zoom app
 
-Common signatures: `OBSIDIAN_CLI_MISSING` → server process predates the LaunchAgent PATH edit (check with `ps -o etime= -p <pid>`); `Invalid signature` on a `Callback received` row → unsigned probe, normal noise; `Pi stalled with no output` → slow first token on a large transcript, retry usually recovers.
+- **User request:** "reauthorize Zoom," "I changed scopes," or "open the Zoom authorization page."
+- **Procedure:** Ensure the callback and public tunnel are live, then open the current authorization URL from **General facts**. The user clicks **Allow**.
+- **Safety:** Authorization codes expire in approximately 60 seconds. Do not ask the user to reuse an old code.
+- **Result:** The server stores refreshed OAuth tokens in `data/zoom-oauth.json` or the configured `ZOOM_OAUTH_STORE_PATH`.
+
+### List meetings and recording assets
+
+- **User request:** "list my Zoom recordings," "find the meeting," or "show the available assets."
+- **Procedure:** Run:
+  ```bash
+  node scripts/zoom-list.mjs --from YYYY-MM-DD --to YYYY-MM-DD [--json]
+  ```
+- **Result:** One row per recording file with meeting date, topic, meeting ID, file type, size, and status. The script uses `/v2/users/me/recordings` and `/v2/meetings/{id}/recordings`.
+
+### Download recording assets
+
+- **User request:** "download the Zoom video," "download the recordings," or "save the meeting assets locally."
+- **Procedure:** Run:
+  ```bash
+  node scripts/zoom-download.mjs --meeting <meetingId> [--dir <destination>]
+  ```
+  By default, files go under `John's Stuff/Zoom/<date> <topic>/`.
+- **Result:** Every completed asset is downloaded: video, audio, transcript, chat, timeline, captions, and related files. The script verifies each file by completing the stream and reporting its size.
+- **Operational notes:** Re-run a meeting download after flaky large-file chunks. Use the meeting ID, not only the date/topic, to disambiguate repeated topics and meetings crossing midnight UTC.
+
+### Delete cloud recording assets
+
+- **User request:** "delete the Zoom recording" or "remove the cloud recording after downloading."
+- **Procedure:** Use the downloader's double opt-in flags:
+  ```bash
+  node scripts/zoom-download.mjs --meeting <meetingId> --delete --yes
+  ```
+- **Safety:** Confirm the meeting ID, destination, and successful local verification immediately before deletion. The script refuses `--delete` without `--yes` and leaves the cloud copy if any download fails.
+- **Result:** The cloud meeting recording is deleted only after all completed files verify locally.
+
+### Retry transcript processing
+
+- **User request:** "retry the failed transcript," "rerun that meeting," or "process the failed callback again."
+- **Procedure:** Run:
+  ```bash
+  node scripts/manual-retry.mjs <failedActivityId>
+  ```
+- **Result:** A fresh activity row is created and linked to the failed row. The already-downloaded VTT is copied into the new job directory so the retry does not depend on an expired Zoom download token.
+
+### Inspect callback history
+
+- **User request:** "show what happened with the Zoom callback" or "inspect the failed job."
+- **Procedure:** Open [http://127.0.0.1:8788/events](http://127.0.0.1:8788/events), or query the activity ledger directly:
+  ```bash
+  sqlite3 data/events.sqlite "SELECT title, receivedAt, status, substr(error,1,100) FROM activities ORDER BY receivedAt DESC LIMIT 10;"
+  ```
+- **Result:** Activity rows show received, running, succeeded, failed, and incomplete callback attempts.
+
+## Callbacks
+
+### `recording.transcript_completed`
+
+- **Endpoint:** `https://dev-callbacks.arcturus-labs.com/zoom/transcripts` forwards to local `POST /zoom/transcripts`.
+- **Verification:** `src/callback.mjs` verifies Zoom's HMAC signature and timestamp using `ZOOM_WEBHOOK_SECRET`. It answers `endpoint.url_validation` and returns `202` before model work.
+- **Processing:** `src/zoom.mjs` extracts meeting metadata, the transcript download URL, and temporary download token. `src/retry.mjs` runs the Pi processor, retrying post-spawn failures according to `PI_MAX_ATTEMPTS` and `PI_RETRY_DELAY_MS`.
+- **Pi work:** `src/processor.mjs` starts Pi in an isolated directory under `PI_WORK_ROOT`. `prompts/zoom-transcript.md` tells Pi to download/validate the VTT, process the meeting, append the original transcript, verify the appendix, and write `zoom-processing-result.json` with `status: completed`.
+- **Downstream skill:** For the Obsidian updates, Pi must use the `how-to-use-peeps-obsidian` skill. That skill governs person searches, event-note creation, participant links, log entries, and transcript-appending rules. Do not duplicate its rules here.
+- **Success evidence:** A completed marker, a successful activity row, and an entry in `logs/zoom-transcript-success.jsonl`.
+- **Failure evidence:** `data/events.sqlite` records the activity; `logs/zoom-transcript-pi.jsonl` records Pi lifecycle output with tokens redacted. Failed jobs can be retried with `manual-retry.mjs`.
+
+## Scheduled events
+
+No scheduled events are currently configured for Zoom.
+
+When adding one, record its schedule and timezone, trigger and inputs, the operation or callback it invokes, expected output, and failure/retry/notification behavior in this section.
+
+### Future scheduled event placeholder
+
+- **Schedule/timezone:** `<not configured>`
+- **Trigger and inputs:** `<describe the future trigger and inputs>`
+- **Action:** `<name the operation or callback to invoke>`
+- **Output and notification:** `<describe expected output and who is notified>`
+- **Failure/retry:** `<describe retry and escalation behavior>`
+
+## Diagnostics and troubleshooting
+
+### Fastest evidence path
+
+1. Query the activity ledger:
+   ```bash
+   sqlite3 data/events.sqlite "SELECT title, receivedAt, status, substr(error,1,100) FROM activities ORDER BY receivedAt DESC LIMIT 10;"
+   ```
+2. For stalls or unclear exits, inspect the matching request ID in `logs/zoom-transcript-pi.jsonl`.
+3. Check whether the expected event note and participant updates exist in the Peeps vault; defer completion rules to the `how-to-use-peeps-obsidian` skill.
+4. Use `node scripts/zoom-list.mjs` for Zoom's cloud ground truth and inspect `John's Stuff/Zoom/` for local assets.
+
+### Common signatures
+
+- `OBSIDIAN_CLI_MISSING` → the server process lacks Obsidian's CLI directory on `PATH`; check the LaunchAgent environment.
+- `Invalid signature` → an unsigned or stale callback probe; inspect timestamp and webhook secret configuration.
+- `Pi timed out` → the overall Pi timeout was reached; inspect the Pi log and retry only after checking whether the work is safe to repeat.
+- `Pi stalled with no output` → Pi has exceeded the configured silence ceiling, often while waiting for a slow first model response on a large transcript; a retry may recover.
+- A pair of rows about 60 seconds apart with `retryOf` metadata → original callback plus automatic retry; inspect both attempts before retrying manually.
+
+### Batch download learnings
+
+- Repeated date/topic names need a `[meetingId]` suffix when organizing local folders.
+- A meeting that crosses midnight UTC can appear under two dates with identical filenames; verify by meeting ID.
+- The list flag parser accepts both `--flag value` and `--flag=value` forms.
+- Completed large files can fail during transfer; rerun the meeting download rather than deleting the cloud copy.

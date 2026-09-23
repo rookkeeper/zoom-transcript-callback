@@ -22,7 +22,21 @@ reference file. Read only the one you need.
 
 | Area | Reference |
 |---|---|
+| Domain-reference structure for facts, setup, operations, callbacks, schedules, and diagnostics when adding a new domain | [references/domain-template.md](references/domain-template.md) |
 | Zoom meeting processing: callback flow, Pi prompt setup, recording downloads, Zoom app setup (type, scopes, env vars) | [references/zoom.md](references/zoom.md) |
+
+## Domain reference convention
+
+Every new integration domain gets its own reference file under `references/`, following [the domain template](references/domain-template.md). Keep durable, non-secret facts and reminders there, along with setup, the standard operating protocol, callbacks, scheduled events, and diagnostics.
+
+Route requests to the matching section:
+
+- account facts, URLs, IDs, or reminders → **General facts**;
+- credentials, scopes, permissions, redirects, or deployment → **Setup and configuration**;
+- an operation the agent should perform on request → **Standard operating protocol**;
+- an inbound webhook or provider notification → **Callbacks**;
+- a recurring or time-based job → **Scheduled events**;
+- a failure, status check, or recovery question → **Diagnostics and troubleshooting**.
 
 ## Repo layout (stable)
 
@@ -41,3 +55,6 @@ reference file. Read only the one you need.
 - Follow the development-lifecycle skill: change directory under `CHANGES/`, work on a worktree branch, TDD new behavior, PR, merge, clean up.
 - Never log or commit secrets, download tokens, or transcript content. Tests use fake tokens and in-memory databases.
 - When adding an env var, add it to `.env.example` with a comment in the same commit.
+
+## Rules for changing this skill
+- This repo has callbacks and interactions across several domains. If a change requires absolute generality, then you can change this file. But if it's related into one of the subdomains mentioned in references, then opt for changing that first.
