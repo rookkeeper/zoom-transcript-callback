@@ -131,9 +131,9 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 - **User request:** "retry the failed transcript," "rerun that meeting," or "process the failed callback again."
 - **Procedure:** Run:
   ```bash
-  node scripts/manual-retry.mjs <failedActivityId>
+  node scripts/manual-retry.mjs <meetingId>
   ```
-- **Result:** A fresh activity row is created and linked to the failed row. Retry by sending the same meeting ID through the shared asset workflow; it re-fetches/reuses the assets, verifies API names against the filesystem, starts Pi from the transcript, and deletes only the non-transcript cloud assets after verification.
+- **Result:** A fresh activity row is created and linked to the failed row. Supply the meeting ID—not the activity ID—to `scripts/manual-retry.mjs`; it finds the failed/incomplete activity for that meeting and sends the same ID through the shared asset workflow. The workflow re-fetches/reuses assets, verifies API names against the filesystem, starts Pi from the transcript, and deletes only non-transcript cloud assets after verification.
 
 ### Inspect callback history
 

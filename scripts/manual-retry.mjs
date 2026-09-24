@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Retry a failed transcript job by retrieving the meeting's assets from Zoom again.
-// Usage: node scripts/manual-retry.mjs <failedRequestId>
+// Retry a meeting by retrieving its assets from Zoom again.
+// Usage: node scripts/manual-retry.mjs <meetingId>
 import { randomUUID } from "node:crypto";
 import { loadConfig } from "../src/config.mjs";
 import { ActivityService } from "../src/activities.mjs";
 import { ActivityRepository } from "../src/repository.mjs";
 import { createProcessor } from "../src/processor.mjs";
 
-const failedId = process.argv[2];
-if (!failedId) {
-  console.error("Usage: node scripts/manual-retry.mjs <failedRequestId>");
+const meetingId = process.argv[2];
+if (!meetingId) {
+  console.error("Usage: node scripts/manual-retry.mjs <meetingId>");
   process.exit(1);
 }
 
@@ -17,11 +17,15 @@ const config = loadConfig();
 const repository = new ActivityRepository(config.eventsDatabasePath);
 const activities = new ActivityService(repository);
 const processor = createProcessor(config);
-const original = activities.get(failedId);
+const original = activities.list().find(row => {
+  const metadata = typeof row.metadata === "string" ? JSON.parse(row.metadata) : (row.metadata ?? {});
+  return metadata.meetingId === meetingId && ['failed', 'incomplete'].includes(row.status);
+});
 if (!original) {
-  console.error(`No activity found for ${failedId}`);
+  console.error(`No failed or incomplete activity found for meeting ${meetingId}`);
   process.exit(1);
 }
+const failedId = original.id;
 
 const originalMeta = typeof original.metadata === "string" ? JSON.parse(original.metadata) : (original.metadata ?? {});
 const retryId = randomUUID();
@@ -33,7 +37,7 @@ activities.receive({
   metadata: {
     method: "MANUAL_RETRY",
     retryOf: failedId,
-    meetingId: originalMeta.meetingId ?? "",
+    meetingId,
     meetingUuid: originalMeta.meetingUuid ?? "",
     model: config.piModel || "default",
   },
@@ -44,7 +48,7 @@ const details = {
   eventTimestamp: "",
   accountId: "",
   meetingUuid: originalMeta.meetingUuid ?? "",
-  meetingId: originalMeta.meetingId ?? "",
+  meetingId,
   topic: original.title,
   meetingType: "",
   hostId: "",
