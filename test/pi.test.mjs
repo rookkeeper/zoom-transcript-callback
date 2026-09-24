@@ -36,7 +36,7 @@ test("builds an unattended Pi command with explicit skills", () => {
 });
 
 test("redacts Zoom bearer tokens from Pi output", () => {
-  assert.equal(redactPiOutput("curl -H 'Authorization: Bearer secret-token' secret-token", "secret-token"), "curl -H 'Authorization: Bearer [REDACTED]' [REDACTED_ZOOM_DOWNLOAD_TOKEN]");
+  assert.equal(redactPiOutput("curl -H 'Authorization: Bearer secret-token' secret-token"), "curl -H 'Authorization: Bearer [REDACTED]' secret-token");
 });
 
 test("accepts only an explicit completed processing marker", () => {

@@ -24,9 +24,9 @@ test("creates the Zoom validation response", () => {
   assert.match(response.encryptedToken, /^[0-9a-f]{64}$/);
 });
 
-test("selects the transcript recording file", () => {
+test("extracts the meeting ID and metadata without requiring callback download fields", () => {
   const details = transcriptDetails({
-    download_token: "temporary",
+    event: "recording.transcript_completed",
     object: {
       id: 123,
       uuid: "uuid",
@@ -35,17 +35,13 @@ test("selects the transcript recording file", () => {
         { file_name: "Audio only - Elisa L" },
         { file_name: "Audio only - John B" },
       ],
-      recording_files: [
-        { file_type: "MP4", download_url: "video" },
-        { file_type: "TRANSCRIPT", recording_type: "audio_transcript", download_url: "transcript" },
-      ],
     },
   });
-  assert.equal(details.downloadUrl, "transcript");
-  assert.equal(details.downloadToken, "temporary");
+  assert.equal(details.meetingId, "123");
+  assert.equal(details.topic, "Topic");
   assert.equal(details.participantAudioFileNames, "Audio only - Elisa L, Audio only - John B");
 });
 
-test("requires a downloadable transcript", () => {
-  assert.throws(() => transcriptDetails({ object: { recording_files: [] } }), /downloadable transcript/);
+test("requires a meeting ID", () => {
+  assert.throws(() => transcriptDetails({ object: {} }), /meeting ID/);
 });

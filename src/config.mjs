@@ -3,6 +3,7 @@ import { join } from "node:path";
 import process from "node:process";
 import { ZOOM_TRANSCRIPT_PROMPT } from "./zoomPrompt.mjs";
 import { loadPiSkills } from "./pi.mjs";
+import { downloadMeetingAssets } from "./zoomDownloads.mjs";
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -14,7 +15,7 @@ export function loadConfig() {
   const repoRoot = process.cwd();
   const repoSkillDirectory = join(repoRoot, ".agents", "skills", "how-to-use-this-repo");
   const piSkillsRoot = process.env.PI_SKILLS_ROOT?.trim() || "/Users/johnberryman/projects/github/JnBrymn/agent-skills/skills";
-  return {
+  const config = {
     host: process.env.CALLBACK_HOST?.trim() || "127.0.0.1",
     port: Number.parseInt(process.env.CALLBACK_PORT ?? "8787", 10),
     eventsPort: Number.parseInt(process.env.EVENTS_PORT ?? "8788", 10),
@@ -40,5 +41,7 @@ export function loadConfig() {
     zoomTokenUrl: process.env.ZOOM_TOKEN_URL?.trim() || "https://zoom.us/oauth/token",
     zoomRedirectUri: process.env.ZOOM_REDIRECT_URI?.trim() || "https://dev-callbacks.arcturus-labs.com/zoom/oauth",
     zoomOAuthStorePath: process.env.ZOOM_OAUTH_STORE_PATH?.trim() || join(process.cwd(), 'data', 'zoom-oauth.json'),
+    downloadAssets: (meetingId, options) => downloadMeetingAssets(config, meetingId, options),
   };
+  return config;
 }

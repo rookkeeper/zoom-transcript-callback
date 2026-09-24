@@ -37,10 +37,10 @@ Receipt can finish without processing (validation, rejection, unsupported event)
 
 ## Pi and Zoom adapters
 
-`processor.createProcessor(config, {spawn?, kill?}?) -> (details, requestId) -> Promise<{status, error, metadata}>`: creates a private working directory, renders the prompt, starts Pi, logs output, enforces timeout, and checks the completion marker. Only a valid completed marker after exit zero writes the append-only success ledger. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
+`processor.createProcessor(config, {spawn?, kill?, downloadAssets?}?) -> (details, requestId) -> Promise<{status, error, metadata}>`: retrieves the meeting assets through the Zoom API, creates a private working directory, renders the prompt, starts Pi, logs output, enforces timeout, and checks the completion marker. Only a valid completed marker after exit zero writes the append-only success ledger. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
 
 `pi.mjs`: `loadPiSkills(root,repoSkillDirectory) -> paths[]`; `piArgs({model,skills,title,prompt}) -> string[]`; `jobDirectory(root,id) -> path`; `appendJsonLine(path,entry) -> void`; `readCompletionMarker(directory) -> object|null`; `redactPiOutput(text,token) -> string`.
 
-`zoom.mjs`: `zoomSignature(secret,timestamp,body) -> string`; `verifyZoomSignature({secret,timestamp,signature,rawBody,nowSeconds?,maxAgeSeconds?}) -> boolean`; `validationResponse(secret,token) -> object`; `transcriptDetails(payload) -> selected fields`, including credentials used only by the processor.
+`zoom.mjs`: `zoomSignature(secret,timestamp,body) -> string`; `verifyZoomSignature({secret,timestamp,signature,rawBody,nowSeconds?,maxAgeSeconds?}) -> boolean`; `validationResponse(secret,token) -> object`; `transcriptDetails(payload) -> meeting metadata and meeting ID`. `zoomDownloads.mjs` retrieves all completed assets through the Zoom API and writes them to the standard meeting folder.
 
 For another callback: add an HTTP route with its own verification and deliberate metadata mapping; call `receive/update/run` with its endpoint, type, title and processor. The repository, history API, and UI need no type-specific change.

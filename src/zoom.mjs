@@ -23,9 +23,7 @@ export function validationResponse(secret, plainToken) {
 export function transcriptDetails(payload) {
   const meeting = payload?.payload?.object ?? payload?.object;
   if (!meeting || typeof meeting !== "object") throw new Error("Missing Zoom meeting object");
-  const files = Array.isArray(meeting.recording_files) ? meeting.recording_files : [];
-  const transcript = files.find((file) => file?.file_type === "TRANSCRIPT" || file?.recording_type === "audio_transcript");
-  if (!transcript?.download_url || !payload.download_token) throw new Error("Zoom payload has no downloadable transcript");
+  if (meeting.id == null) throw new Error("Zoom payload has no meeting ID");
 
   return {
     event: text(payload.event),
@@ -47,20 +45,6 @@ export function transcriptDetails(payload) {
     participantAudioFileNames: Array.isArray(meeting.participant_audio_files)
       ? meeting.participant_audio_files.map((file) => file?.file_name).filter(Boolean).join(", ")
       : "",
-    recordingFileId: text(transcript.id),
-    recordingMeetingId: text(transcript.meeting_id),
-    recordingFileName: text(transcript.file_name),
-    recordingStart: text(transcript.recording_start),
-    recordingEnd: text(transcript.recording_end),
-    recordingFileType: text(transcript.file_type),
-    recordingFileExtension: text(transcript.file_extension),
-    recordingFileSize: text(transcript.file_size),
-    recordingPlayUrl: text(transcript.play_url),
-    recordingDownloadUrl: text(transcript.download_url),
-    recordingStatus: text(transcript.status),
-    recordingType: text(transcript.recording_type),
-    downloadUrl: text(transcript.download_url),
-    downloadToken: text(payload.download_token),
   };
 }
 

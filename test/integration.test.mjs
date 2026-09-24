@@ -21,7 +21,7 @@ test('signed callback is acknowledged before completion, queried locally, and pr
     const status=await new Promise((resolve,reject)=>http.get(localUrl+'/api/events',{headers},response=>{response.resume();resolve(response.statusCode);}).on('error',reject));
     assert.equal(status,403,JSON.stringify(headers));
   }
-  const payload={event:'recording.transcript_completed',download_token:'credential',payload:{object:{id:'42',uuid:'meeting',topic:'John and Tom',recording_files:[{id:'file',file_type:'TRANSCRIPT',download_url:'https://example.test/transcript'}]}}};
+  const payload={event:'recording.transcript_completed',payload:{object:{id:'42',uuid:'meeting',topic:'John and Tom'}}};
   for(const outcome of ['succeeded','failed','incomplete']){
     const body=JSON.stringify(payload),timestamp=String(Math.floor(Date.now()/1000));
     const response=await fetch(publicUrl+'/zoom/transcripts',{method:'POST',body,headers:{'x-zm-request-timestamp':timestamp,'x-zm-signature':zoomSignature('test',timestamp,body)}});

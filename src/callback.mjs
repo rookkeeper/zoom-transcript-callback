@@ -31,7 +31,7 @@ export function callbackHandler(config, activities, processor) {
       if (body.event !== 'recording.transcript_completed') { activities.finish(id,'incomplete',{},'Unsupported Zoom event'); send(204); return; }
       const details = transcriptDetails(body);
       const title = typeof body.payload?.object?.topic === 'string' ? body.payload.object.topic : body.event || 'Zoom callback';
-      activities.update(id,{ metadata:{ meetingId:details.meetingId,meetingUuid:details.meetingUuid,recordingFileId:details.recordingFileId,model:config.piModel } });
+      activities.update(id,{ metadata:{ meetingId:details.meetingId,meetingUuid:details.meetingUuid,model:config.piModel } });
       // Acknowledge before model work; the retry runner owns asynchronous completion.
       send(202,{ accepted:true, activityId:id });
       void runTranscriptJob({

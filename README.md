@@ -25,13 +25,13 @@ The ordinary cloud-meeting transcript event requires, according to [Zoom's event
 
 Zoom sends `endpoint.url_validation` during setup. The callback handles that challenge. Normal requests are authenticated using the `x-zm-request-timestamp` and `x-zm-signature` headers and the raw body. Zoom requires a 2xx response within three seconds.
 
-The event payload includes meeting metadata, a completed transcript recording file, its `download_url`, and a temporary `download_token`. The configured prompt passes those values to the agent, which is responsible for downloading and processing the transcript. Treat the token and transcript as sensitive.
+The event payload includes meeting metadata and the meeting ID. The callback uses the General-app OAuth API to retrieve every completed asset for that meeting into `John's Stuff/Zoom/<date> <topic>/`, then passes the downloaded transcript to Pi.
 
 ### Pi
 
-Install and authenticate [Pi](https://github.com/badlogic/pi-mono) for the model you want to use. The LaunchAgent runs Pi non-interactively with the `how-to-use-peeps-obsidian` skill from `PI_SKILLS_ROOT`, plus the shell and file tools needed to download a transcript and update the vault. The Obsidian CLI executable must be available; a separate CLI skill is not required.
+Install and authenticate [Pi](https://github.com/badlogic/pi-mono) for the model you want to use. The LaunchAgent runs Pi non-interactively with the repository skill and the `how-to-use-peeps-obsidian` skill from `PI_SKILLS_ROOT`, plus the shell and file tools needed to process the downloaded transcript and update the vault. The Obsidian CLI executable must be available; a separate CLI skill is not required.
 
-Each job receives its private temporary directory in the prompt. Pi downloads the original transcript to `zoom-transcript.vtt`, creates the event note, and runs the Peeps skill's `scripts/append_transcript.py` with that local file. The prompt requires verification of the bottom-of-note transcript appendix before writing the completion marker. Temporary job files remain available for diagnosis until the operating system clears them.
+The server retrieves all completed meeting assets into `John's Stuff/Zoom/<date> <topic>/` before starting Pi. Pi receives the permanent meeting folder and transcript path, creates the event note, and runs the Peeps skill's `scripts/append_transcript.py` with that transcript. The prompt requires verification of the bottom-of-note transcript appendix before writing the completion marker. Temporary job directories remain available for diagnostics.
 
 ## Configuration
 
@@ -173,14 +173,14 @@ With the server running in another terminal, send signed local test requests:
 ./scripts/send-fake-request.sh transcript
 ```
 
-The validation request should return Zoom's validation response. The transcript request should return `{"accepted":true}` and launch Pi. Use `validation` first; `transcript` starts a Pi session and uses the fake download URL.
+The validation request should return Zoom's validation response. The transcript request should return `{"accepted":true}` and launch the API asset-download stage. Use `validation` first; `transcript` requires a usable Zoom OAuth connection if the full asynchronous job is allowed to run.
 
 Before configuring Zoom, test the full local path with a signed fixture and a fake `pi` executable. Then use Zoom's validation control in the Marketplace app. The callback returns before Pi finishes. Inspect the callback process logs, `PI_EXECUTION_LOG_PATH`, and `ZOOM_SUCCESS_LOG_PATH` when debugging.
 
 ## Security notes
 
 - Keep `.env` private and never commit it.
-- Do not log request bodies, transcript content, Zoom download tokens, or Rook auth tokens.
+- Do not log request bodies, transcript content, OAuth tokens, or Rook auth tokens.
 - Keep the callback bound to loopback; expose it only through the tunnel.
 - Enforce the request age and body-size limits.
 - The webhook payload is untrusted meeting data. The callback uses a fixed Pi executable, skill list, model setting, and prompt file; payload values cannot configure code execution.
