@@ -27,10 +27,15 @@ export function createProcessor(config, {
     const context = { requestId, meetingUuid: details.meetingUuid, meetingId: details.meetingId };
     const log = (event, fields = {}) => appendJsonLine(config.piLogPath, { event, ...context, ...fields });
     let assets = null;
+    let concurrentPi = null;
 
     if (downloadAssets) {
       try {
-        assets = await downloadAssets(details.meetingId);
+        assets = await downloadAssets(details.meetingId, {
+          onTranscriptReady: ready => {
+            concurrentPi = createProcessor({ ...config, downloadAssets: async () => ready }, { spawn, kill, which, downloadAssets: async () => ready })(details, requestId);
+          },
+        });
         log('zoom_assets_ready', {
           meetingFolder: assets.directory,
           transcriptPath: assets.transcriptPath,
@@ -41,6 +46,12 @@ export function createProcessor(config, {
         log('zoom_assets_failed', { error: message });
         return { status: 'failed', error: message, metadata: {} };
       }
+    }
+
+    if (concurrentPi) {
+      const result = await concurrentPi;
+      if (result.status !== 'succeeded') return result;
+      return { ...result, metadata: { ...result.metadata, verifiedAssets: assets?.verified ?? false, deletedAssets: assets?.deleted?.length ?? 0 } };
     }
 
     const title = `${config.titlePrefix} · ${details.topic}`;

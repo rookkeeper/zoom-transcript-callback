@@ -133,7 +133,7 @@ These are the operations the agent can perform when the user asks about Zoom. Al
   ```bash
   node scripts/manual-retry.mjs <failedActivityId>
   ```
-- **Result:** A fresh activity row is created and linked to the failed row. The meeting's assets are retrieved again through the Zoom API and placed in the standard `John's Stuff/Zoom/<date> <topic>/` folder.
+- **Result:** A fresh activity row is created and linked to the failed row. Retry by sending the same meeting ID through the shared asset workflow; it re-fetches/reuses the assets, verifies API names against the filesystem, starts Pi from the transcript, and deletes only the non-transcript cloud assets after verification.
 
 ### Inspect callback history
 
@@ -153,12 +153,13 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 - **Processing:** `src/zoom.mjs` extracts meeting metadata and the meeting ID. `src/zoomDownloads.mjs` uses the General-app OAuth API to retrieve every completed recording asset into `John's Stuff/Zoom/<date> <topic>/`. `src/retry.mjs` runs the Pi processor, retrying post-spawn failures according to `PI_MAX_ATTEMPTS` and `PI_RETRY_DELAY_MS`.
 - **Pi work:** `src/processor.mjs` retrieves the meeting assets before starting Pi, then starts Pi in an isolated directory under `PI_WORK_ROOT`; the prompt is hardwired in `src/zoomPrompt.mjs` and only identifies the callback, supplies callback data, and points Pi to this skill and the loaded skills.
 - **Transcript callback workflow:** When a `recording.transcript_completed` callback arrives:
-  1. Use the meeting ID with the Zoom API to retrieve all completed meeting assets into `John's Stuff/Zoom/<date> <topic>/`. Reuse non-empty files already in that folder.
-  2. Pass the downloaded transcript path and meeting folder to Pi.
-  3. Use the `how-to-use-peeps-obsidian` skill to create a new event document for the meeting.
-  4. Update existing participant files or create new person files as that skill describes. The event summary must incorporate information from all participants; the Peeps skill's large-meeting LinkedIn limit still applies.
-  5. Append and verify the original transcript using the Peeps skill's script.
-  6. Only after every required step succeeds, write `zoom-processing-result.json` with `status: completed`.
+  1. Start the shared meeting workflow with the meeting ID. Download the transcript first, then immediately start Pi while the remaining completed assets download into `John's Stuff/Zoom/<date> <topic>/`.
+  2. Compare the completed asset names returned by the API with non-empty files on disk. Only after they match, delete every cloud asset except the transcript.
+  3. Pass the downloaded transcript path and meeting folder to Pi.
+  4. Use the `how-to-use-peeps-obsidian` skill to create a new event document for the meeting.
+  5. Update existing participant files or create new person files as that skill describes. The event summary must incorporate information from all participants; the Peeps skill's large-meeting LinkedIn limit still applies.
+  6. Append and verify the original transcript using the Peeps skill's script.
+  7. Only after every required step succeeds, write `zoom-processing-result.json` with `status: completed`.
 - **Downstream skill:** For the Obsidian updates, Pi must use the `how-to-use-peeps-obsidian` skill. That skill governs person searches, event-note creation, participant links, log entries, and transcript-appending rules. Do not duplicate its detailed note-format rules here.
 - **Success evidence:** A completed marker, a successful activity row, and an entry in `logs/zoom-transcript-success.jsonl`.
 - **Failure evidence:** `data/events.sqlite` records the activity; `logs/zoom-transcript-pi.jsonl` records Pi lifecycle output with tokens redacted. Failed jobs can be retried with `manual-retry.mjs`.

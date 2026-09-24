@@ -41,7 +41,7 @@ export function loadConfig() {
     zoomTokenUrl: process.env.ZOOM_TOKEN_URL?.trim() || "https://zoom.us/oauth/token",
     zoomRedirectUri: process.env.ZOOM_REDIRECT_URI?.trim() || "https://dev-callbacks.arcturus-labs.com/zoom/oauth",
     zoomOAuthStorePath: process.env.ZOOM_OAUTH_STORE_PATH?.trim() || join(process.cwd(), 'data', 'zoom-oauth.json'),
-    downloadAssets: (meetingId, options) => downloadMeetingAssets(config, meetingId, options),
+    downloadAssets: (meetingId, options = {}) => downloadMeetingAssets(config, meetingId, { deleteAssets: true, ...options }),
   };
   return config;
 }

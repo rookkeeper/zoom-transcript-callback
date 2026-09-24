@@ -2,8 +2,7 @@
 // Download every completed asset for one Zoom meeting.
 // Usage: node scripts/zoom-download.mjs --meeting <meetingId> [--dir <dest>] [--delete --yes]
 import { loadConfig } from "../src/config.mjs";
-import { zoomApi } from "../src/zoomOAuth.mjs";
-import { downloadMeetingAssets, zoomAuth } from "../src/zoomDownloads.mjs";
+import { downloadMeetingAssets } from "../src/zoomDownloads.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -27,14 +26,13 @@ if (wantDelete && !flag("--yes")) {
 }
 
 const config = loadConfig();
-const result = await downloadMeetingAssets(config, meetingId, { directory: flag("--dir") ?? undefined });
+const result = await downloadMeetingAssets(config, meetingId, {
+  directory: flag("--dir") ?? undefined,
+  deleteAssets: wantDelete,
+});
 for (const file of result.files) {
   console.log(`${file.action} ${file.name}${file.bytes ? ` (${file.bytes} bytes)` : ""}`);
 }
 
-if (wantDelete) {
-  await zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`, { method: "DELETE" });
-  console.log(`deleted cloud recording for meeting ${meetingId} (local copies verified in ${result.directory})`);
-} else {
-  console.log(`done → ${result.directory}`);
-}
+if (wantDelete) console.log(`deleted ${result.deleted.length} cloud assets, preserved transcript (local copies verified in ${result.directory})`);
+else console.log(`done → ${result.directory}`);
