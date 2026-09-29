@@ -3,8 +3,9 @@ import { dirname, join } from "node:path";
 
 const REQUIRED_SKILLS = ["how-to-use-peeps-obsidian", "obsidian-general-usage"];
 
-export function loadPiSkills(skillsRoot) {
+export function loadPiSkills(skillsRoot, repoSkillDirectory = null) {
   const skills = REQUIRED_SKILLS.map((name) => join(skillsRoot, name));
+  if (repoSkillDirectory) skills.push(repoSkillDirectory);
   for (const skill of skills) {
     if (!existsSync(join(skill, "SKILL.md"))) throw new Error(`Missing Pi skill: ${skill}`);
   }
@@ -39,10 +40,7 @@ export function readCompletionMarker(jobDir) {
   }
 }
 
-// Pi output can echo a tool command. Keep operational evidence while never
-// persisting the temporary Zoom bearer token or Authorization header.
-export function redactPiOutput(text, downloadToken) {
-  let result = String(text).replace(/(Authorization:\s*Bearer\s+)[^\s'"`]+/gi, "$1[REDACTED]");
-  if (downloadToken) result = result.split(downloadToken).join("[REDACTED_ZOOM_DOWNLOAD_TOKEN]");
-  return result;
+// Pi output can echo a tool command. Never persist Authorization headers.
+export function redactPiOutput(text) {
+  return String(text).replace(/(Authorization:\s*Bearer\s+)[^\s'"`]+/gi, "$1[REDACTED]");
 }

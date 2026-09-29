@@ -9,6 +9,8 @@
   - [ ] Incorporate form 
   - [ ] Update project name and structure and skills
   - [ ] Update website to use new endpoint callbacks.arcturus-labs.com/website/contact-form 
-  - [ ] Rename and move this repo 
-  - [ ] Delete form repo 
+  - [ ] Delete form repo.
+- [ ] Rename this repo to "mission-control"
+  - [ ] Make generic as a livestream.
+- [ ] Set up the ability to schedule callbacks (cron plus curl is a fine starting point)
 

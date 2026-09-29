@@ -22,13 +22,27 @@ reference file. Read only the one you need.
 
 | Area | Reference |
 |---|---|
+| Domain-reference structure for facts, setup, operations, callbacks, schedules, and diagnostics when adding a new domain | [references/domain-template.md](references/domain-template.md) |
 | Zoom meeting processing: callback flow, Pi prompt setup, recording downloads, Zoom app setup (type, scopes, env vars) | [references/zoom.md](references/zoom.md) |
+
+## Domain reference convention
+
+Every new integration domain gets its own reference file under `references/`, following [the domain template](references/domain-template.md). Keep durable, non-secret facts and reminders there, along with setup, the standard operating protocol, callbacks, scheduled events, and diagnostics.
+
+Route requests to the matching section:
+
+- account facts, URLs, IDs, or reminders → **General facts**;
+- credentials, scopes, permissions, redirects, or deployment → **Setup and configuration**;
+- an operation the agent should perform on request → **Standard operating protocol**;
+- an inbound webhook or provider notification → **Callbacks**;
+- a recurring or time-based job → **Scheduled events**;
+- a failure, status check, or recovery question → **Diagnostics and troubleshooting**.
 
 ## Repo layout (stable)
 
 - `src/` — server source (`callback.mjs`, `processor.mjs`, `pi.mjs`, `retry.mjs`, `zoom.mjs`, `zoomOAuth.mjs`, `oauthCallback.mjs`, `config.mjs`, …).
 - `test/` — `node:test` suites mirroring `src/`; run with `npm test`.
-- `prompts/` — the Pi instruction templates. `zoom-transcript.md` is the live prompt (HTML comments stripped at load); `zoom-transcript.example.md` documents every `{{placeholder}}`.
+- `src/zoomPrompt.mjs` — the internal Pi transcript-processing prompt and its `{{placeholder}}` contract.
 - `scripts/` — `run-server.sh` (start/restart), `manual-retry.mjs` (re-run a failed job), `send-fake-request.sh` (signed local test), `zoom-download.mjs` (pull recording assets via API).
 - `ui/` — local history screen served on the events port (`/events`).
 - `ARCHITECTURE/` — server, database, UI design notes. `PRODUCT/overview.md` — product intent.
@@ -41,3 +55,6 @@ reference file. Read only the one you need.
 - Follow the development-lifecycle skill: change directory under `CHANGES/`, work on a worktree branch, TDD new behavior, PR, merge, clean up.
 - Never log or commit secrets, download tokens, or transcript content. Tests use fake tokens and in-memory databases.
 - When adding an env var, add it to `.env.example` with a comment in the same commit.
+
+## Rules for changing this skill
+- This repo has callbacks and interactions across several domains. If a change requires absolute generality, then you can change this file. But if it's related into one of the subdomains mentioned in references, then opt for changing that first.
