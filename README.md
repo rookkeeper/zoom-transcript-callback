@@ -50,7 +50,7 @@ Edit `.env`:
 - `PI_IDLE_TIMEOUT_MS` — maximum silence from a Pi job before it is treated as stalled, defaulting to 10 minutes. Pi emits no incremental output in non-interactive mode, so this must comfortably exceed the longest expected quiet stretch (large transcripts mean minutes before the first output).
 - `PI_MAX_ATTEMPTS` — total tries per meeting including the first, defaulting to 2. Post-spawn failures (stalls, timeouts, bad exits, missing completion marker) wait `PI_RETRY_DELAY_MS` (default 60s) and run again as a fresh activity row linked via `retryOf`; pre-spawn failures such as Pi failing to start are not retried.
 - `PI_EXECUTION_LOG_PATH` — append-only JSONL log of Pi lifecycle events, stdout, stderr, and errors. Temporary Zoom bearer tokens are redacted.
-- `ZOOM_SUCCESS_LOG_PATH` — append-only JSONL log of transcript jobs that Pi explicitly marked completed after its Peeps updates.
+- `ZOOM_SUCCESS_LOG_PATH` — append-only JSONL completion ledger: one row per finished Pi job. `transcript_processed` for jobs Pi explicitly marked completed after its Peeps updates; `transcript_failed` (with `status` and `error`) for every other exit.
 - The transcript-processing prompt is hardwired in [`src/zoomPrompt.mjs`](src/zoomPrompt.mjs). It directs Pi to read the repository's `how-to-use-this-repo` Zoom reference and use the `how-to-use-peeps-obsidian` skill.
 
 Start or restart the callback with:

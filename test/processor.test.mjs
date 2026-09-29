@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createProcessor } from '../src/processor.mjs';
 
 for (const outcome of ['success','exit','spawn','missing','timeout']) {
-  test(`Pi processor records ${outcome} and writes ledger only for verified success`, async t => {
+  test(`Pi processor records ${outcome} and writes the ledger for every exit`, async t => {
     const root=mkdtempSync(join(tmpdir(),'processor-')); t.after(()=>rmSync(root,{recursive:true,force:true}));
     const config={piWorkRoot:root,piCli:'fake',piSkills:['/skill'],piModel:'test',titlePrefix:'Zoom',promptTemplate:'{{topic}} {{jobDirectory}}',piLogPath:join(root,'pi.jsonl'),successLogPath:join(root,'success.jsonl'),piTimeoutMs:outcome==='timeout'?10:10000,piIdleTimeoutMs:5000};
     const child=new EventEmitter(); child.stdout=new EventEmitter(); child.stderr=new EventEmitter(); child.pid=123;
@@ -24,7 +24,18 @@ for (const outcome of ['success','exit','spawn','missing','timeout']) {
     const processor=createProcessor(config,{spawn,kill:()=>{killed=true;child.emit('close',null,'SIGTERM');}});
     const result=await processor({topic:'Meeting',meetingId:'42',downloadToken:'test-download-credential'},'job');
     assert.equal(result.status,outcome==='success'?'succeeded':outcome==='missing'?'incomplete':'failed');
-    assert.equal(existsSync(config.successLogPath),outcome==='success');
+    assert.ok(existsSync(config.successLogPath),`ledger row written for ${outcome}`);
+    const ledger=readFileSync(config.successLogPath,'utf8').trim().split('\n').map(l=>JSON.parse(l));
+    assert.equal(ledger.length,1);
+    assert.equal(ledger[0].status,result.status);
+    assert.equal(ledger[0].meetingId,'42');
+    if(outcome==='success'){
+      assert.equal(ledger[0].event,'transcript_processed');
+      assert.equal(ledger[0].summary,'Done');
+    } else {
+      assert.equal(ledger[0].event,'transcript_failed');
+      assert.equal(ledger[0].error,result.error);
+    }
     assert.ok(!readFileSync(config.piLogPath,'utf8').includes('test-download-credential'));
     if(outcome==='success') assert.deepEqual(result.metadata.notePaths,['Tom.md']);
     if(outcome==='timeout'){assert.equal(killed,true);assert.match(result.error,/timed out/i);}
@@ -56,6 +67,10 @@ test('Pi processor fails fast with a greppable error when obsidian is missing fr
   assert.match(result.error,/OBSIDIAN_CLI_MISSING/);
   const logged=readFileSync(config.piLogPath,'utf8');
   assert.match(logged,/OBSIDIAN_CLI_MISSING/);
+  const ledger=readFileSync(config.successLogPath,'utf8').trim().split('\n').map(l=>JSON.parse(l));
+  assert.equal(ledger.length,1);
+  assert.equal(ledger[0].event,'transcript_failed');
+  assert.match(ledger[0].error,/OBSIDIAN_CLI_MISSING/);
 });
 
 test('Pi processor passes PATH through unchanged and spawns when obsidian resolves', async t => {

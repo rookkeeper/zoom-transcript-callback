@@ -37,7 +37,7 @@ Receipt can finish without processing (validation, rejection, unsupported event)
 
 ## Pi and Zoom adapters
 
-`processor.createProcessor(config, {spawn?, kill?, downloadAssets?}?) -> (details, requestId) -> Promise<{status, error, metadata}>`: retrieves the meeting assets through the Zoom API, creates a private working directory, renders the prompt, starts Pi, logs output, enforces timeout, and checks the completion marker. Only a valid completed marker after exit zero writes the append-only success ledger. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
+`processor.createProcessor(config, {spawn?, kill?, downloadAssets?}?) -> (details, requestId) -> Promise<{status, error, metadata}>`: retrieves the meeting assets through the Zoom API, creates a private working directory, renders the prompt, starts Pi, logs output, enforces timeout, and checks the completion marker. Every terminal Pi outcome writes one row to the append-only completion ledger: `transcript_processed` after a valid completed marker and exit zero, otherwise `transcript_failed` with the status and error. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
 
 `pi.mjs`: `loadPiSkills(root,repoSkillDirectory) -> paths[]`; `piArgs({model,skills,title,prompt}) -> string[]`; `jobDirectory(root,id) -> path`; `appendJsonLine(path,entry) -> void`; `readCompletionMarker(directory) -> object|null`; `redactPiOutput(text,token) -> string`.
 

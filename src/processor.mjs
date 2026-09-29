@@ -44,6 +44,11 @@ export function createProcessor(config, {
       } catch (error) {
         const message = `Zoom asset download failed: ${error.message}`;
         log('zoom_assets_failed', { error: message });
+        try {
+          appendJsonLine(config.successLogPath, { event: 'transcript_failed', status: 'failed', ...context, error: message });
+        } catch {
+          // Best effort: the execution log already records the outcome.
+        }
         return { status: 'failed', error: message, metadata: {} };
       }
     }
@@ -74,6 +79,11 @@ export function createProcessor(config, {
     if (!obsidianPath) {
       const error = 'OBSIDIAN_CLI_MISSING: obsidian executable not found on PATH; check the server PATH includes the Obsidian CLI directory';
       log('pi_failed', { error });
+      try {
+        appendJsonLine(config.successLogPath, { event: 'transcript_failed', status: 'failed', ...context, error });
+      } catch {
+        // Best effort: the execution log already records the outcome.
+      }
       return { status: 'failed', error, metadata: {} };
     }
 
@@ -86,6 +96,19 @@ export function createProcessor(config, {
         transcriptPath: assets.transcriptPath,
         assetCount: assets.files.length,
       } : {};
+      // The completion ledger records every terminal Pi outcome, not just
+      // successes: `transcript_processed` on verified success, otherwise
+      // `transcript_failed` with the status and error.
+      const ledger = (status, error, metadata = {}) => {
+        appendJsonLine(config.successLogPath, {
+          event: status === 'succeeded' ? 'transcript_processed' : 'transcript_failed',
+          status,
+          ...context,
+          pid: child?.pid,
+          ...(error ? { error } : {}),
+          ...metadata,
+        });
+      };
       const finish = (status, error, metadata = {}) => {
         if (settled) return;
         settled = true;
@@ -93,10 +116,22 @@ export function createProcessor(config, {
         clearTimeout(idleTimer);
         try {
           log(`pi_${status}`, { error, pid: child?.pid, ...metadata });
-          resolve({ status, error, metadata });
         } catch (logError) {
           reject(logError);
+          return;
         }
+        try {
+          ledger(status, error, metadata);
+        } catch {
+          if (status === 'succeeded') {
+            // Never report success without ledger evidence.
+            try { log('pi_failed', { error: 'Success ledger write failed', pid: child?.pid }); } catch {}
+            resolve({ status: 'failed', error: 'Success ledger write failed', metadata });
+            return;
+          }
+          // Best effort: the execution log already records the outcome.
+        }
+        resolve({ status, error, metadata });
       };
       const armIdleTimer = () => {
         clearTimeout(idleTimer);
@@ -144,12 +179,6 @@ export function createProcessor(config, {
           summary: typeof completion.summary === 'string' ? redactPiOutput(completion.summary) : '',
         };
         if (Array.isArray(completion.notePaths)) metadata.notePaths = completion.notePaths.filter(x => typeof x === 'string').map(redactPiOutput);
-        try {
-          appendJsonLine(config.successLogPath, { event: 'transcript_processed', ...context, pid: child.pid, ...metadata });
-        } catch {
-          finish('failed', 'Success ledger write failed');
-          return;
-        }
         finish('succeeded', null, metadata);
       });
       timer = setTimeout(() => {

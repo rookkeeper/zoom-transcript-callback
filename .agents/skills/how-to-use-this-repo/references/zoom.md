@@ -70,7 +70,7 @@ python3 -c "import json; print(json.load(open('data/zoom-oauth.json'))['scope'])
 | `ZOOM_TOKEN_URL` | OAuth token endpoint; defaults to `https://zoom.us/oauth/token` |
 | `ZOOM_REDIRECT_URI` | must match the app's OAuth redirect URL |
 | `ZOOM_OAUTH_STORE_PATH` | persisted user tokens; defaults to `./data/zoom-oauth.json` |
-| `ZOOM_SUCCESS_LOG_PATH` | completed-transcript ledger |
+| `ZOOM_SUCCESS_LOG_PATH` | completion ledger: one row per finished Pi job (`transcript_processed` on success, `transcript_failed` otherwise) |
 | `PI_CLI_PATH`, `PI_MODEL`, `PI_SESSION_TITLE_PREFIX`, `PI_SKILLS_ROOT` | Pi executable, model, session naming, and skill root |
 | `PI_TIMEOUT_MS`, `PI_IDLE_TIMEOUT_MS`, `PI_MAX_ATTEMPTS`, `PI_RETRY_DELAY_MS` | processing timeout, silence ceiling, retry attempts, and backoff |
 | `PI_EXECUTION_LOG_PATH`, `PI_WORK_ROOT` | Pi lifecycle log and private job directories |
@@ -162,7 +162,7 @@ These are the operations the agent can perform when the user asks about Zoom. Al
   7. Only after every required step succeeds, write `zoom-processing-result.json` with `status: completed`.
 - **Downstream skill:** For the Obsidian updates, Pi must use the `how-to-use-peeps-obsidian` skill. That skill governs person searches, event-note creation, participant links, log entries, and transcript-appending rules. Do not duplicate its detailed note-format rules here.
 - **Success evidence:** A completed marker, a successful activity row, and an entry in `logs/zoom-transcript-success.jsonl`.
-- **Failure evidence:** `data/events.sqlite` records the activity; `logs/zoom-transcript-pi.jsonl` records Pi lifecycle output with tokens redacted. Failed jobs can be retried with `manual-retry.mjs`.
+- **Failure evidence:** `data/events.sqlite` records the activity; `logs/zoom-transcript-pi.jsonl` records Pi lifecycle output with tokens redacted; `logs/zoom-transcript-success.jsonl` records a `transcript_failed` row with the status and error. Failed jobs can be retried with `manual-retry.mjs`.
 
 ## Scheduled events
 
