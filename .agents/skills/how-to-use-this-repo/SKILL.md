@@ -46,13 +46,13 @@ Route requests to the matching section:
 - `scripts/` — `run-server.sh` (start/restart), `manual-retry.mjs` (re-run a failed job), `send-fake-request.sh` (signed local test), `zoom-download.mjs` (pull recording assets via API).
 - `ui/` — local history screen served on the events port (`/events`).
 - `ARCHITECTURE/` — server, database, UI design notes. `PRODUCT/overview.md` — product intent.
-- `CHANGES/` — dated lifecycle records per change (`BRAINSTORM.md`, `TODO.md`, `WORKSTEPS.md`, `OUTCOMES.md`).
+- `TASKS/` — the task system. `KANBAN/` official cards, `WIP/<task>/{brainstorm.md,todos.md}` for active planning, `COMPLETE/<task>/` for finished artifacts and `outcome.md`. `BACKLOG.md` at the root is quick capture, not the board.
 - `data/` (`events.sqlite`, `zoom-oauth.json`) and `logs/` (`zoom-transcript-pi.jsonl`, `zoom-transcript-success.jsonl`) are runtime state: gitignored, never commit.
 - `.env` holds secrets (gitignored). `.env.example` is the audited list of required variables — keep it in sync when adding or removing `process.env.*` reads.
 
 ## Rules for every change
 
-- Follow the development-lifecycle skill: change directory under `CHANGES/`, work on a worktree branch, TDD new behavior, PR, merge, clean up.
+- Follow the `software-factory` skill (`.agents/skills/software-factory`, symlinked and gitignored): promote the work to a card in `TASKS/KANBAN/`, plan it in `TASKS/WIP/<task>/` with `brainstorm.md` and `todos.md`, do the work on branch/worktree `<task>`, TDD new behavior, then integrate, record `outcome.md`, and clean up.
 - Never log or commit secrets, download tokens, or transcript content. Tests use fake tokens and in-memory databases.
 - When adding an env var, add it to `.env.example` with a comment in the same commit.
 

@@ -1,3 +1,9 @@
+# Outcome: Server events screen
+
+Task: TASKS/KANBAN/server-events-screen.md
+Completed: 2026-09-15
+Worker: single agent session (pre-factory; migrated from TASKS/WIP/2026-09-11--server-events-screen)
+
 # Test evidence
 
 Implementation began after checkpoint commit `7d8e787` on 2026-09-15. No live model call or Peeps mutation was used for validation.

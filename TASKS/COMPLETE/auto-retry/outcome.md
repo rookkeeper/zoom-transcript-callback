@@ -1,3 +1,9 @@
+# Outcome: Auto-retry with backoff
+
+Task: TASKS/KANBAN/auto-retry.md
+Completed: 2026-09-17
+Worker: single agent session (pre-factory; migrated from CHANGES/2026-09-17-auto-retry)
+
 # Outcomes
 
 Merged PR #1 (`fa18826`) via merge commit after explicit developer approval, then resolved the main-checkout dirty files against it and restarted the server.

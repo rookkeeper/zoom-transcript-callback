@@ -1,3 +1,9 @@
+# Outcome: Zoom OAuth token exchange plus recording downloader
+
+Task: TASKS/KANBAN/zoom-oauth-downloads.md
+Completed: 2026-09-20
+Worker: single agent session (pre-factory; migrated from CHANGES/2026-09-18-zoom-oauth-downloads)
+
 # Outcomes
 
 Merged PR #2 (`b1e64b9`) via merge commit after explicit developer approval; deployed with LaunchAgent PATH fix and server restart.

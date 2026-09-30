@@ -1,3 +1,9 @@
+# Outcome: Meeting-ID processing and per-asset archive
+
+Task: TASKS/KANBAN/parallel-meeting-archive.md
+Completed: 2026-09-30
+Worker: single agent session (pre-factory; migrated from CHANGES/2026-09-29-parallel-meeting-archive)
+
 # Meeting-ID processing and per-asset archive
 
 User explicitly requested direct-on-main implementation; unrelated changes preserved.

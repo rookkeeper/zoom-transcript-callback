@@ -29,3 +29,23 @@ Two consecutive stall failures (Ethan Plunk 31b7cd6d, then fafb8eb8) with identi
 - [x] Document retry + knobs in README and .env.example
 - [ ] Reprocess the failed fafb8eb8 run via manual-retry script
 - [ ] Commit planning record, implement on worktree/branch, PR, merge
+
+## Original lifecycle checklist
+
+# Development lifecycle worksteps
+
+> As you work through the development lifecycle, make sure that you check the boxes in the following list as you finish with each item. If you've chosen to go an unusual path like skipping, and I don't hear then make an explicit note to the side of each bullet explaining the departure and the rationale.
+
+- [x] Orient to the project
+- [x] Create the change directory and lifecycle record
+- [x] Brainstorm to work, or bypass because the work is simple or obvious; do not mark complete until the developer confirms the direction
+- [x] Record the agreed decision and TODO after the explicit decision gate
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test
+- [x] Mark compatibility surfaces
+- [x] Maintain product and architecture documentation
+- [x] Run final validation
+- [x] Synchronize with main before submitting
+- [x] Open and validate the PR
+- [x] Merge with approval
+- [x] Record outcomes and clean up

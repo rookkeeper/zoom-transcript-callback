@@ -1,3 +1,7 @@
+# Backlog (quick capture)
+
+Drop rough ideas here without interrupting work to create a fully specified official task. This list is not the official task system; the orchestrator reviews it and can help promote selected items into `TASKS/KANBAN/`. When an item is promoted, check it off and link the official task.
+
 - [ ] Make another endpoint for Zoom meetings where right after the meeting ends then I can just paste in my notes and kind of shape what the agent emphasizes in the meeting notes it creates.
   - [ ] OR Just make it read the meeting notes, and just remember at the end of the meeting to paste in the notes every time.
 - [ ] Take a screenshot from the meeting at a time when the other person is talking and post it.

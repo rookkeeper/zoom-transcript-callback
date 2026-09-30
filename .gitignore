@@ -2,6 +2,10 @@
 .agents/skills/software-factory
 
 node_modules/
+
+# Per-task git worktrees.
+/.worktrees/
+
 .env
 .env.*
 !.env.example
