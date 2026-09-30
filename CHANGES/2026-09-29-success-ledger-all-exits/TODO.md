@@ -14,7 +14,7 @@ The success ledger (`logs/zoom-transcript-success.jsonl`, via `ZOOM_SUCCESS_LOG_
 
 ## Work checklist
 
-- [ ] Emit a ledger row for every terminal Pi outcome (success, failed, incomplete, pre-spawn failure).
-- [ ] Update `test/processor.test.mjs` to assert a ledger row exists for every outcome with the right event/status.
-- [ ] Update README + skill reference wording (success ledger → completion ledger semantics).
-- [ ] Run `npm test` and complete the final review.
+- [x] Emit a ledger row for every terminal Pi outcome (success, failed, incomplete, pre-spawn failure).
+- [x] Update `test/processor.test.mjs` to assert a ledger row exists for every outcome with the right event/status.
+- [x] Update README + skill reference wording (success ledger → completion ledger semantics).
+- [x] Run `npm test` and complete the final review.

@@ -13,4 +13,5 @@
 - [ ] Rename this repo to "mission-control"
   - [ ] Make generic as a livestream.
 - [ ] Set up the ability to schedule callbacks (cron plus curl is a fine starting point)
+- [ ] Remove the timeout and instead make it so that the agent time is limited. I just want to make sure the agent isn't churning.
 

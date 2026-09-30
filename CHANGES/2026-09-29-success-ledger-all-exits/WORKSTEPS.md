@@ -6,11 +6,11 @@
 - [x] Create the change directory and lifecycle record
 - [x] Brainstorm to work, or bypass because the work is simple or obvious; do not mark complete until the developer confirms the direction — bypassed: developer's direction ("log failures there too or any other type of exit") is explicit and small
 - [x] Record the agreed decision and TODO after the explicit decision gate
-- [ ] Prepare the implementation workspace after the planning commit
-- [ ] Implement and test
-- [ ] Mark compatibility surfaces
-- [ ] Maintain product and architecture documentation
-- [ ] Run final validation
+- [x] Prepare the implementation workspace after the planning commit
+- [x] Implement and test
+- [x] Mark compatibility surfaces — none: success-row shape preserved (additive `status` field only); new `transcript_failed` event is additive; no shims or fallbacks
+- [x] Maintain product and architecture documentation
+- [x] Run final validation
 - [ ] Synchronize with main before submitting
 - [ ] Open and validate the PR
 - [ ] Merge with approval
