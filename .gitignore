@@ -1,3 +1,6 @@
+# Software-factory skill is symlinked to its canonical location, never vendored.
+.agents/skills/software-factory
+
 node_modules/
 .env
 .env.*
