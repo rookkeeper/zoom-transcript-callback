@@ -5,6 +5,18 @@ Start here before doing anything in this repo:
 - Read `/Users/johnberryman/projects/github/rookkeeper/zoom-transcript-callback/.agents/skills/how-to-use-this-repo/SKILL.md`
 - That skill is authoritative for repo layout, rules, and per-domain references. Paths in it are relative to this repo root.
 
+## Software practices
+
+- This repo's software practices are managed by the `software-factory` skill — planning, task tracking, delegation, worktrees, and integration.
+- That skill lives at `.agents/skills/software-factory` as a symlink to its canonical location in the agent-skills repo, and it is gitignored. Keep it symlinked and gitignored; never vendor a copy into this repo.
+- Commit any change to the software-factory skill in the repo where the skill actually lives, not here.
+
+## Spoken progress reports
+
+- Report progress out loud with `say` whenever a research or implementation task takes more than a few tool calls or more than one thinking step.
+- Use exactly this form: `say "zoom-transcript-callback: <status update>"`, where the status update is a single sentence of 5-9 words.
+- Send one short sentence per update; do not narrate every step.
+
 ## What lives here
 
 For now this repo is mostly one thing: a local Zoom webhook adapter.
