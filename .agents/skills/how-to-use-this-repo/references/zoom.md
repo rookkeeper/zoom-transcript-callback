@@ -57,6 +57,43 @@ Adding a scope later requires reauthorization with the same URL; new tokens over
 python3 -c "import json; print(json.load(open('data/zoom-oauth.json'))['scope'])"
 ```
 
+### Cloud recording layout (required so videos save to cloud)
+
+If cloud videos/audio/transcripts are missing, check here first. The host's settings control the recording, layout settings must be configured before the meeting starts, and cloud layouts cannot be changed retroactively after the meeting begins.
+
+**A. Web portal: Settings → Recording (some accounts label it Recording & Transcript), under Cloud recording:**
+
+- Cloud recording: On
+- Zoom Meeting: Checked
+- Record active speaker with shared screen: On
+- Record gallery view with shared screen: On
+- Record active speaker, gallery view and shared screen separately: On
+  - Active speaker: On
+  - Gallery view: On
+  - Shared screen: On
+- Record audio-only files: On
+  - One audio file for all participants: On
+  - Separate audio file for each participant: On
+- Create audio transcript: On
+- Automatic recording: On → Record in the cloud: Selected
+- Optional but useful: Save chat messages On; Record thumbnails when sharing On; Optimize recording for 3rd-party video editor On
+
+Known failure: video saves broke when `Record active speaker with shared screen` and `Record gallery view with shared screen` were off. Both must be On.
+
+**B. Desktop app: Zoom Workplace → profile picture → Settings → Recording:**
+
+- Record video during screen sharing: On
+- Show video and screen share side-by-side: Off (leave off to get separate cloud files rather than one combined local-style layout)
+- Record separate participant audio files: applies primarily to computer/local recordings; the cloud equivalent is the web-portal audio setting above
+- Local recording path: must have enough free space; does not affect cloud recordings
+
+**C. Per-meeting checklist:**
+
+- Confirm the indicator says Recording to the cloud (not local).
+- At least two participants with cameras on for a gallery-view file.
+- Start an actual screen share for a shared-screen file.
+- Layouts cannot be changed after the meeting begins.
+
 ### Environment variables
 
 `.env` (gitignored) holds live values; `.env.example` is the audited list and must stay synchronized.
@@ -124,7 +161,7 @@ These are the operations the agent can perform when the user asks about Zoom. Al
   node scripts/zoom-download.mjs --meeting <meetingId> --delete --yes
   ```
 - **Safety:** Confirm the meeting ID, destination, and successful local verification immediately before deletion. The script refuses `--delete` without `--yes` and leaves the cloud copy if any download fails.
-- **Result:** The cloud meeting recording is deleted only after all completed files verify locally.
+- **Result:** The cloud recording is deleted only after every completed asset verifies locally.
 
 ### Retry transcript processing
 
@@ -153,8 +190,8 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 - **Processing:** `src/zoom.mjs` extracts meeting metadata and the meeting ID. `src/zoomDownloads.mjs` uses the General-app OAuth API to retrieve every completed recording asset into `John's Stuff/Zoom/<date> <topic>/`. `src/retry.mjs` runs the Pi processor, retrying post-spawn failures according to `PI_MAX_ATTEMPTS` and `PI_RETRY_DELAY_MS`.
 - **Pi work:** `src/processor.mjs` retrieves the meeting assets before starting Pi, then starts Pi in an isolated directory under `PI_WORK_ROOT`; the prompt is hardwired in `src/zoomPrompt.mjs` and only identifies the callback, supplies callback data, and points Pi to this skill and the loaded skills.
 - **Transcript callback workflow:** When a `recording.transcript_completed` callback arrives:
-  1. Start the shared meeting workflow with the meeting ID. Download the transcript first, then immediately start Pi while the remaining completed assets download into `John's Stuff/Zoom/<date> <topic>/`.
-  2. Compare the completed asset names returned by the API with non-empty files on disk. Only after they match, delete every cloud asset except the transcript.
+  1. Call `createMeetingJob(config)(meetingId)`. Transcript download/agent processing and media archiving run concurrently into `John's Stuff/Zoom/<date> <topic>/`.
+  2. Three archive workers each download one non-transcript asset to a `.part` file, verify its size, atomically promote it, and immediately delete that asset from Zoom. Each operation retries up to three times with backoff. Existing files are reused only with an exact API-size match or a completed-download receipt; nonempty partial files are not trusted. The transcript stays in Zoom. Transcript outcome and `mediaStatus` are reported separately; media failure does not erase successful Obsidian work.
   3. Pass the downloaded transcript path and meeting folder to Pi.
   4. Use the `how-to-use-peeps-obsidian` skill to create a new event document for the meeting.
   5. Update existing participant files or create new person files as that skill describes. The event summary must incorporate information from all participants; the Peeps skill's large-meeting LinkedIn limit still applies.
@@ -197,6 +234,7 @@ When adding one, record its schedule and timezone, trigger and inputs, the opera
 - `Pi timed out` → the overall Pi timeout was reached; inspect the Pi log and retry only after checking whether the work is safe to repeat.
 - `Pi stalled with no output` → Pi has exceeded the configured silence ceiling, often while waiting for a slow first model response on a large transcript; a retry may recover.
 - A pair of rows about 60 seconds apart with `retryOf` metadata → original callback plus automatic retry; inspect both attempts before retrying manually.
+- Missing cloud video/audio/transcript files (only some layouts saved, or nothing saved to cloud) → verify **Setup and configuration → Cloud recording layout** above: web-portal shared-screen options off, automatic cloud recording off, or meeting recorded locally instead of to the cloud are the usual causes.
 
 ### Batch download learnings
 
