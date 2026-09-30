@@ -37,7 +37,9 @@ Receipt can finish without processing (validation, rejection, unsupported event)
 
 ## Pi and Zoom adapters
 
-`processor.createProcessor(config, {spawn?, kill?, downloadAssets?}?) -> (details, requestId) -> Promise<{status, error, metadata}>`: retrieves the meeting assets through the Zoom API, creates a private working directory, renders the prompt, starts Pi, logs output, enforces timeout, and checks the completion marker. Only a valid completed marker after exit zero writes the append-only success ledger. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
+`meetingJob.createMeetingJob(config) -> processMeeting(meetingId, requestId?)`: fetches the recording index, then runs transcript/agent processing concurrently with three media archive workers. Each archive unit downloads to `.part`, verifies API size (or records completed-stream provenance), atomically promotes the local file, and immediately deletes that cloud asset. Download and deletion retry independently with bounded backoff. The transcript remains in Zoom. Activity status follows transcript outcome; `metadata.mediaStatus` and per-file results expose archive failures separately.
+
+`processor.createProcessor(config, {spawn?, kill?}?) -> (details, requestId, assets?) -> Promise<{status, error, metadata}>`: creates a private working directory, renders the prompt with supplied local assets, starts Pi, logs output, enforces timeout, and checks the completion marker. Only a valid completed marker after exit zero writes the append-only success ledger. Metadata includes summary and optional structured `notePaths`. Timeouts fail even if termination is slow.
 
 `pi.mjs`: `loadPiSkills(root,repoSkillDirectory) -> paths[]`; `piArgs({model,skills,title,prompt}) -> string[]`; `jobDirectory(root,id) -> path`; `appendJsonLine(path,entry) -> void`; `readCompletionMarker(directory) -> object|null`; `redactPiOutput(text,token) -> string`.
 

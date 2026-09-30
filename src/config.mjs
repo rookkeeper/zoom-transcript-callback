@@ -3,7 +3,6 @@ import { join } from "node:path";
 import process from "node:process";
 import { ZOOM_TRANSCRIPT_PROMPT } from "./zoomPrompt.mjs";
 import { loadPiSkills } from "./pi.mjs";
-import { downloadMeetingAssets } from "./zoomDownloads.mjs";
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -41,7 +40,6 @@ export function loadConfig() {
     zoomTokenUrl: process.env.ZOOM_TOKEN_URL?.trim() || "https://zoom.us/oauth/token",
     zoomRedirectUri: process.env.ZOOM_REDIRECT_URI?.trim() || "https://dev-callbacks.arcturus-labs.com/zoom/oauth",
     zoomOAuthStorePath: process.env.ZOOM_OAUTH_STORE_PATH?.trim() || join(process.cwd(), 'data', 'zoom-oauth.json'),
-    downloadAssets: (meetingId, options = {}) => downloadMeetingAssets(config, meetingId, { deleteAssets: true, ...options }),
   };
   return config;
 }

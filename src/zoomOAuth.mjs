@@ -75,9 +75,10 @@ export async function zoomApi({ baseUrl = API_HOST, tokenUrl, clientId, clientSe
     storeTokens(storePath, tokens);
     response = await attempt(tokens.access_token);
   }
+  if (response.status === 404 && options.method === 'DELETE') return null;
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Zoom API ${path} failed (${response.status}): ${detail.slice(0, 200)}`);
+    throw Object.assign(new Error(`Zoom API request failed (${response.status})`), { status: response.status });
   }
   if (response.status === 204) return null;
   return response.json().catch(() => null);
