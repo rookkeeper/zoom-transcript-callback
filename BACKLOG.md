@@ -19,4 +19,5 @@ Drop rough ideas here without interrupting work to create a fully specified offi
 - [ ] Set up the ability to schedule callbacks (cron plus curl is a fine starting point)
 - [ ] Remove the timeout and instead make it so that the agent time is limited. I just want to make sure the agent isn't churning.
 - [ ] Clean up the download redundancy: `downloadMeetingAssets` in `zoomDownloads.mjs` is dead for the production path (only `scripts/zoom-download.mjs` still calls it) since the meeting-job archive took over. Decide whether to retire it or rebase the manual script on the archive branch, keeping the shared naming/index helpers.
+- [ ] Update the activity failure enums: `failed`/`succeeded`/`incomplete` are too narrow for transcript processing — distinct modalities fail distinctly (missing transcript, e.g. Zoom "Unable to transcribe" as in meeting `87850645500` on 2026-10-01; Pi timeout/stall; media-archive failure vs transcript failure). Add distinct terminal states/reasons in the database. Separate story from the logging cleanup (`app-logging`); do logging first.
 
