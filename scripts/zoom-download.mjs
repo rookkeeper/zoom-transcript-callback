@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Download every completed asset for one Zoom meeting.
-// Usage: node scripts/zoom-download.mjs --meeting <meetingId> [--dir <dest>] [--delete --yes]
+// Download every completed asset for one Zoom meeting instance.
+// Usage: node scripts/zoom-download.mjs --meeting <meetingUuid> [--dir <dest>] [--delete --yes]
+// The UUID selects the exact recording instance; a numeric ID lists whichever
+// instance Zoom returns for it and cannot disambiguate repeated IDs.
 import { loadConfig } from "../src/config.mjs";
 import { downloadMeetingAssets } from "../src/zoomDownloads.mjs";
 
@@ -14,9 +16,9 @@ const flag = (name, fallback = null) => {
   return next && !next.startsWith("--") ? next : true;
 };
 
-const meetingId = flag("--meeting");
-if (!meetingId) {
-  console.error("Usage: node scripts/zoom-download.mjs --meeting <meetingId> [--dir <dest>] [--delete --yes]");
+const meetingKey = flag("--meeting");
+if (!meetingKey) {
+  console.error("Usage: node scripts/zoom-download.mjs --meeting <meetingUuid> [--dir <dest>] [--delete --yes]");
   process.exit(1);
 }
 const wantDelete = Boolean(flag("--delete"));
@@ -26,7 +28,7 @@ if (wantDelete && !flag("--yes")) {
 }
 
 const config = loadConfig();
-const result = await downloadMeetingAssets(config, meetingId, {
+const result = await downloadMeetingAssets(config, meetingKey, {
   directory: flag("--dir") ?? undefined,
   deleteAssets: wantDelete,
 });

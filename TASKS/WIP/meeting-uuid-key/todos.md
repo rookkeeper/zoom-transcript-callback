@@ -13,14 +13,14 @@ Orchestrator: copy this template to `TASKS/WIP/<task>/todos.md` when planning be
 
 - [x] Review task plan, project instructions, PRODUCT/, and ARCHITECTURE/.
 - [x] Create TASKS/WIP/meeting-uuid-key/brainstorm.md and TASKS/WIP/meeting-uuid-key/todos.md, perform brainstorming and todo list generation, and update the paths here (orchestrator). — Round 1 decided 2026-10-01; execution slice written.
-- [ ] Review all TASKS/WIP/meeting-uuid-key documents (worker).
-- [ ] Before worker launch: verify clean, committed main; create the matching task branch/worktree; verify planning documents in it; launch worker there (orchestrator).
-- [ ] Verify assigned worktree and branch before task edits; stop if launched elsewhere, never create a worktree or work from main (worker).
-- [ ] Confirm the task is appropriately sized; return to orchestrator if it needs decomposition.
-- [ ] UUID plumbing: `processMeeting`/`listAssets`/`downloadMeetingAssets`/`deleteMeeting` take meeting UUID; API paths use double-encoded UUID (`encodeURIComponent(encodeURIComponent(uuid))`); numeric ID kept in metadata only. `retry.mjs` passes `details.meetingUuid`; `callback.mjs` metadata unchanged (already stores both).
-- [ ] Folder disambiguation: `listAssets` appends ` 2`, ` 3`, … when `<date> <topic>` already exists (belonging to a different UUID); existing single-instance folders unchanged.
-- [ ] Scripts migrated: `manual-retry.mjs` (takes UUID, matches `meetingUuid`, calls the same `createMeetingJob` processor), `process-meeting.mjs` (takes UUID), `zoom-download.mjs --meeting` (accepts UUID).
-- [ ] Tests: UUID-keyed fetch paths, double-encoding, folder incrementing, retry lookup by UUID. `npm test` passes.
+- [x] Review all TASKS/WIP/meeting-uuid-key documents (worker).
+- [x] Before worker launch: verify clean, committed main; create the matching task branch/worktree; verify planning documents in it; launch worker there (orchestrator). — worktree `.worktrees/meeting-uuid-key` on branch `meeting-uuid-key` (base `07af87e`), verified before edits.
+- [x] Verify assigned worktree and branch before task edits; stop if launched elsewhere, never create a worktree or work from main (worker). — verified `meeting-uuid-key`/`07af87e` before editing.
+- [x] Confirm the task is appropriately sized; return to orchestrator if it needs decomposition. — single worker-sized slice, no decomposition needed.
+- [x] UUID plumbing: `processMeeting`/`listAssets`/`downloadMeetingAssets`/`deleteMeeting` take meeting UUID; API paths use double-encoded UUID (`encodeURIComponent(encodeURIComponent(uuid))`); numeric ID kept in metadata only. `retry.mjs` passes `details.meetingUuid`; `callback.mjs` metadata unchanged (already stores both).
+- [x] Folder disambiguation: `listAssets` appends ` 2`, ` 3`, … when `<date> <topic>` already exists (belonging to a different UUID); existing single-instance folders unchanged.
+- [x] Scripts migrated: `manual-retry.mjs` (takes UUID, matches `meetingUuid`, calls the same `createMeetingJob` processor), `process-meeting.mjs` (takes UUID), `zoom-download.mjs --meeting` (accepts UUID).
+- [x] Tests: UUID-keyed fetch paths, double-encoding, folder incrementing, retry lookup by UUID. `npm test` passes.
 - [ ] Product QA (approved live run): process UUID `1in20/L2QcWjtTp5hFfzcQ==` end-to-end — expect its own 12-file asset list, Peeps event note, downloads, cloud delete-by-UUID of that instance only; stub instance `3zvn...` untouched in cloud.
 - [ ] Sync current main, resolve conflicts, and repeat relevant validation.
 - [ ] Merge locally when ready; update shared task state/artifacts.
@@ -29,6 +29,7 @@ Orchestrator: copy this template to `TASKS/WIP/<task>/todos.md` when planning be
 ## Progress and decisions
 
 - 2026-10-01: task filed; live API verification done (both UUIDs resolve distinctly); Round 1 questions appended to brainstorm. Awaiting user answers.
+- 2026-10-01 (worker): implementation complete in worktree. Design choices: `encodeMeetingKey`/`meetingRecordingsPath` in `zoomDownloads.mjs` own double-encoding (no-op for numeric IDs); folder marker file `.zoom-meeting-uuid` claims-or-increments (`<date> <topic>`, ` 2`, …), adopts legacy markerless folders; `listAssets` accepts an optional root override (string or `{root}`) so tests never touch the real Zoom library; `zoom-list.mjs` fetches per-meeting files by `meeting.uuid ?? meeting.id`; `process-meeting.mjs` receipt method renamed `MANUAL_MEETING_UUID`. New/updated tests: double-encoding + UUID fetch/delete paths, folder increment + reuse + legacy adoption, retry runner passes UUID, downloader keyed by UUID. `npm test` 58/58 pass.
 
 ## Blockers
 

@@ -1,9 +1,52 @@
-import { createWriteStream, existsSync, mkdirSync, statSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { loadStoredTokens, zoomApi } from "./zoomOAuth.mjs";
 
 export const DEFAULT_ZOOM_ROOT = "/Users/johnberryman/Library/Mobile Documents/com~apple~CloudDocs/John's Stuff/Zoom";
+
+// Recording instances are keyed by meeting UUID, never the numeric meeting ID:
+// a reused ID (e.g. a PMI) hosts several instances, while the payload
+// `object.uuid` identifies exactly one. Zoom requires the UUID double-encoded
+// in API paths (`/` and trailing `==` would otherwise split the route).
+// Double-encoding is a no-op for plain numeric IDs.
+export function encodeMeetingKey(key) {
+  return encodeURIComponent(encodeURIComponent(String(key)));
+}
+
+export function meetingRecordingsPath(key) {
+  return `/v2/meetings/${encodeMeetingKey(key)}/recordings`;
+}
+
+const MEETING_UUID_MARKER = ".zoom-meeting-uuid";
+
+// Distinct recording instances can share a `<date> <topic>` folder base.
+// Claim-or-increment: reuse the folder whose marker records this instance's
+// UUID (adopting a legacy folder that has no marker yet), otherwise append
+// " 2", " 3", ... Same-instance re-runs always land in the same folder.
+export function resolveInstanceDirectory(root, baseName, meetingUuid) {
+  const normalized = String(meetingUuid ?? "");
+  for (let suffix = 1; suffix <= 100; suffix += 1) {
+    const candidate = suffix === 1 ? join(root, baseName) : join(root, `${baseName} ${suffix}`);
+    const marker = join(candidate, MEETING_UUID_MARKER);
+    if (!existsSync(candidate)) {
+      mkdirSync(candidate, { recursive: true });
+      if (normalized) writeFileSync(marker, `${normalized}\n`);
+      return candidate;
+    }
+    let recorded = "";
+    try {
+      recorded = existsSync(marker) ? readFileSync(marker, "utf8").trim() : "";
+    } catch {
+      recorded = "";
+    }
+    if (!normalized || !recorded || recorded === normalized) {
+      if (normalized && !recorded) writeFileSync(marker, `${normalized}\n`);
+      return candidate;
+    }
+  }
+  throw new Error(`Too many same-named meeting folders for "${baseName}"`);
+}
 
 export function zoomAuth(config) {
   return { clientId: config.zoomClientId, clientSecret: config.zoomClientSecret, tokenUrl: config.zoomTokenUrl, storePath: config.zoomOAuthStorePath };
@@ -53,11 +96,12 @@ export function assetNamer(files) {
   };
 }
 
-export async function downloadMeetingAssets(config, meetingId, { directory, onTranscriptReady, deleteAssets = false } = {}) {
+export async function downloadMeetingAssets(config, meetingKey, { directory, meetingUuid, root, onTranscriptReady, deleteAssets = false } = {}) {
   const auth = zoomAuth(config);
   if (!auth.clientId || !auth.clientSecret) throw new Error("Zoom OAuth is not configured; set ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET");
-  const meeting = await zoomApi(auth, `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`);
-  const destination = directory ?? join(DEFAULT_ZOOM_ROOT, `${(meeting.start_time ?? "").slice(0, 10)} ${safeTopic(meeting.topic)}`);
+  const meeting = await zoomApi(auth, meetingRecordingsPath(meetingKey));
+  const uuid = meetingUuid ?? meeting.uuid;
+  const destination = directory ?? resolveInstanceDirectory(root ?? DEFAULT_ZOOM_ROOT, `${(meeting.start_time ?? "").slice(0, 10)} ${safeTopic(meeting.topic)}`, uuid);
   mkdirSync(destination, { recursive: true });
   const tokens = loadStoredTokens(auth.storePath);
   if (!tokens?.access_token) throw new Error("No stored Zoom tokens; authorize the General app first");
@@ -66,7 +110,7 @@ export async function downloadMeetingAssets(config, meetingId, { directory, onTr
   const completed = assets.filter((file) => file.status === "completed");
   const nameOf = assetNamer(assets);
   const transcript = completed.find(isTranscriptFile);
-  if (!transcript) throw new Error(`Meeting ${meetingId} has no completed transcript`);
+  if (!transcript) throw new Error(`Meeting ${meetingKey} has no completed transcript`);
   const transcriptDownload = await downloadFile(transcript, nameOf, destination, tokens.access_token);
   const transcriptPath = transcriptDownload.filePath;
   const initial = { meeting, directory: destination, transcriptPath, files: [{ id: transcript.id, name: nameOf(transcript), status: transcript.status, action: initialAction(transcriptPath) }], basename: basename(destination) };
@@ -90,7 +134,7 @@ export async function downloadMeetingAssets(config, meetingId, { directory, onTr
   if (deleteAssets) {
     for (const file of completed) {
       if (file === transcript) continue;
-      await zoomApi(auth, `/v2/meetings/${encodeURIComponent(meetingId)}/recordings/${encodeURIComponent(file.id)}`, { method: "DELETE" });
+      await zoomApi(auth, `${meetingRecordingsPath(meetingKey)}/${encodeURIComponent(file.id)}`, { method: "DELETE" });
       deletions.push({ id: file.id, name: nameOf(file) });
     }
   }
