@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureLocal, downloadAndDeleteOne, getRecordingIndex, archiveMedia } from '../src/assetArchive.mjs';
+import { downloadAsset, listAssets, downloadMedia, verifyLocal } from '../src/assetArchive.mjs';
 import { storeTokens } from '../src/zoomOAuth.mjs';
 
 // Zoom's per-participant audio lives in a separate top-level collection, not in
@@ -48,7 +48,7 @@ test('indexes per-participant audio alongside layouts and names it from file_nam
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   stubHierarchy(t, []);
 
-  const index = await getRecordingIndex(storeConfig(directory), '42', join(directory, 'assets'));
+  const index = await listAssets(storeConfig(directory), '42', join(directory, 'assets'));
 
   assert.deepEqual(index.files.map(f => f.id), ['transcript-id', 'video-id', 'audio-john', 'audio-john-2']);
   assert.equal(index.nameOf(index.transcript), 'transcript-audio_transcript.vtt');
@@ -56,43 +56,38 @@ test('indexes per-participant audio alongside layouts and names it from file_nam
   assert.equal(index.nameOf(index.files[3]), 'audio-john-2-Audio only - John Berryman.m4a');
 });
 
-test('downloads and deletes per-participant audio, preserving only the transcript', async t => {
+test('downloads every collection without deleting anything per-file', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'archive-audio-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const requests = [];
   stubHierarchy(t, requests);
 
   const config = storeConfig(directory);
-  const index = await getRecordingIndex(config, '42', join(directory, 'assets'));
-  const results = await archiveMedia(config, index);
+  const index = await listAssets(config, '42', join(directory, 'assets'));
+  // Transcript-first, then everything else — the production order.
+  await downloadAsset(config, index, index.transcript);
+  const results = await downloadMedia(config, index);
 
-  assert.equal(results.length, 3, 'transcript is excluded from the archive branch');
+  assert.equal(results.length, 3, 'transcript is excluded from the media branch');
   assert.ok(results.every(r => r.status === 'succeeded'), JSON.stringify(results));
-  const deleted = requests.filter(r => r.method === 'DELETE').map(r => r.url.split('/').pop());
-  assert.deepEqual(deleted.sort(), ['audio-john', 'audio-john-2', 'video-id']);
-  assert.ok(!deleted.includes('transcript-id'), 'transcript stays in Zoom');
+  assert.deepEqual(requests.filter(r => r.method === 'DELETE'), [], 'whole-meeting delete happens later, never per file');
+  assert.deepEqual(verifyLocal(index).length, 4);
 });
 
-test('replaces partial legacy file, deletes immediately, and reuses verified local copy on retry', async t => {
+test('replaces a partial legacy file and reuses the verified local copy on retry', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'archive-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const config = { zoomOAuthStorePath: join(directory, 'tokens.json'), zoomClientId: 'fake', zoomClientSecret: 'fake' };
   storeTokens(config.zoomOAuthStorePath, { access_token: 'fake', refresh_token: 'fake', expires_at: Date.now() + 60000 });
   const file = { id: 'video', file_size: 5, download_url: 'https://assets.test/video' };
-  const index = { directory, meetingId: '42', nameOf: () => 'video.mp4' };
+  const index = { directory, nameOf: () => 'video.mp4' };
   writeFileSync(join(directory, 'video.mp4'), 'bad');
   const original = globalThis.fetch; t.after(() => { globalThis.fetch = original; });
-  let downloads = 0, deletes = 0;
-  globalThis.fetch = async (url, options) => {
-    if (options.method === 'DELETE') {
-      deletes++; assert.equal(readFileSync(join(directory, 'video.mp4'), 'utf8'), 'hello');
-      return new Response(null, { status: deletes === 1 ? 204 : 404 });
-    }
-    downloads++; return new Response('hello');
-  };
-  await downloadAndDeleteOne(config, index, file);
-  await downloadAndDeleteOne(config, index, file);
-  assert.equal(downloads, 1); assert.equal(deletes, 2);
+  let downloads = 0;
+  globalThis.fetch = async () => { downloads++; return new Response('hello'); };
+  await downloadAsset(config, index, file);
+  await downloadAsset(config, index, file);
+  assert.equal(downloads, 1);
   assert.equal(existsSync(join(directory, 'video.mp4.part')), false);
 });
 
@@ -103,6 +98,6 @@ test('HTTP failure does not create final file or delete cloud copy', async t => 
   storeTokens(config.zoomOAuthStorePath, { access_token: 'fake' });
   const original = globalThis.fetch; t.after(() => { globalThis.fetch = original; });
   globalThis.fetch = async () => new Response(null, { status: 403 });
-  await assert.rejects(() => ensureLocal(config, { directory, nameOf: () => 'video.mp4' }, { id: 'a', download_url: 'https://assets.test' }), /403/);
+  await assert.rejects(() => downloadAsset(config, { directory, nameOf: () => 'video.mp4' }, { id: 'a', download_url: 'https://assets.test' }), /403/);
   assert.equal(existsSync(join(directory, 'video.mp4')), false);
 });

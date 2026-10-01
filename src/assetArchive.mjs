@@ -1,9 +1,8 @@
-import { createWriteStream, existsSync, mkdirSync, statSync, renameSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, statSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { zoomApi, loadStoredTokens } from './zoomOAuth.mjs';
 import { zoomAuth, assetNamer, isTranscriptFile, meetingAssets, safeTopic, DEFAULT_ZOOM_ROOT } from './zoomDownloads.mjs';
-import { appendJsonLine } from './pi.mjs';
 
 export async function retry(operation, attempts = 3) {
   for (let attempt = 1; ; attempt++) {
@@ -15,51 +14,36 @@ export async function retry(operation, attempts = 3) {
   }
 }
 
-export async function getRecordingIndex(config, meetingId, destination) {
+// Fetch one completed asset listing covering both of Zoom's collections:
+// recording_files (layouts, audio, chat, timeline, captions, transcript) and
+// participant_audio_files (one M4A per participant).
+export async function listAssets(config, meetingId) {
   const meeting = await retry(() => zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`));
-  const directory = destination ?? join(DEFAULT_ZOOM_ROOT, `${(meeting.start_time ?? '').slice(0,10)} ${safeTopic(meeting.topic)}`);
+  const directory = join(DEFAULT_ZOOM_ROOT, `${(meeting.start_time ?? '').slice(0,10)} ${safeTopic(meeting.topic)}`);
   mkdirSync(directory, { recursive: true });
   const files = meetingAssets(meeting).filter(f => f.status === 'completed');
   const transcript = files.find(isTranscriptFile);
-  if (!transcript) throw new Error('No completed transcript');
-  // Walk both Zoom collections (layouts and per-participant audio) and
-  // disambiguate any repeated names by file ID.
+  if (!transcript) throw new Error(`Meeting ${meetingId} has no completed transcript`);
   return { meeting, meetingId, directory, transcript, files, nameOf: assetNamer(files) };
 }
 
-function valid(path, file) {
-  if (!existsSync(path)) return false;
-  const size = statSync(path).size;
-  // Legacy nonempty files are NOT proof of completed downloads.
-  if (Number(file.file_size) > 0) return size === Number(file.file_size);
-  try { const receipt = JSON.parse(readFileSync(`${path}.verified.json`, 'utf8')); return size > 0 && receipt.id === file.id && receipt.size === size; } catch { return false; }
-}
-
-export async function ensureLocal(config, index, file) {
+export async function downloadAsset(config, index, file) {
   const path = join(index.directory, index.nameOf(file));
-  if (valid(path, file)) return path;
+  const api = Number(file.file_size) || 0;
+  if (existsSync(path) && statSync(path).size > 0 && (!api || statSync(path).size === api)) return path;
   await retry(async () => {
     const part = `${path}.part`;
     try {
       const tokens = loadStoredTokens(config.zoomOAuthStorePath);
       const response = await fetch(file.download_url, { headers: { authorization: `Bearer ${tokens.access_token}` }, signal: AbortSignal.timeout(60 * 60 * 1000) });
-      if (!response.ok) throw Object.assign(new Error(`Download HTTP ${response.status}`), { status: response.status });
+      if (!response.ok) throw Object.assign(new Error(`Asset ${index.nameOf(file)} download failed: HTTP ${response.status}`), { status: response.status });
       await pipeline(response.body, createWriteStream(part));
       const size = statSync(part).size;
-      if (!size || (Number(file.file_size) > 0 && size !== Number(file.file_size))) throw new Error('Downloaded size mismatch');
+      if (!size || (api && size !== api)) throw Object.assign(new Error(`Downloaded size mismatch for ${index.nameOf(file)}`), { status: 0 });
       renameSync(part, path);
-      writeFileSync(`${path}.verified.json`, JSON.stringify({ id: file.id, size }), { mode: 0o600 });
     } finally { rmSync(part, { force: true }); }
   });
   return path;
-}
-
-export async function downloadAndDeleteOne(config, index, file) {
-  const path = await ensureLocal(config, index, file);
-  if (!existsSync(path) || statSync(path).size <= 0 || (Number(file.file_size) > 0 && !valid(path, file))) throw new Error('Local verification failed');
-  await retry(() => zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(index.meetingId)}/recordings/${encodeURIComponent(file.id)}`, { method: 'DELETE' }));
-  if (config.piLogPath) appendJsonLine(config.piLogPath, { event: 'asset_archived', meetingId: index.meetingId, fileId: file.id, name: index.nameOf(file) });
-  return { id: file.id, name: index.nameOf(file), status: 'succeeded', deleted: true };
 }
 
 export async function runWithWorkers(items, workers, operation) {
@@ -75,6 +59,37 @@ export async function runWithWorkers(items, workers, operation) {
   return results;
 }
 
-export function archiveMedia(config, index) {
-  return runWithWorkers(index.files.filter(f => f !== index.transcript), 3, file => downloadAndDeleteOne(config, index, file));
+export function downloadMedia(config, index) {
+  return runWithWorkers(index.files.filter(f => f !== index.transcript), 3, async file => {
+    const path = await downloadAsset(config, index, file);
+    return { id: file.id, name: index.nameOf(file), status: 'succeeded', bytes: statSync(path).size };
+  });
+}
+
+export function verifyLocal(index) {
+  const expected = index.files.map(index.nameOf).sort();
+  const actual = index.files.map(index.nameOf)
+    .filter(name => existsSync(join(index.directory, name)) && statSync(join(index.directory, name)).size > 0).sort();
+  if (expected.join('\n') !== actual.join('\n')) {
+    throw new Error(`Local verification failed: API=${expected.join(',')} filesystem=${actual.join(',')}`);
+  }
+  return expected;
+}
+
+// Whole-meeting deletion is eventually consistent: Zoom returns success while
+// the meeting endpoint still lists files. Poll until it 404s so a retry never
+// refetches aliases of files that are already gone.
+export async function deleteMeeting(config, meetingId, { polls = 6, intervalMs = 15000 } = {}) {
+  await retry(() => zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`, { method: 'DELETE' }));
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const current = await zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`);
+      const remaining = [...(current.recording_files ?? []), ...(current.participant_audio_files ?? [])];
+      if (!remaining.length) return { deleted: true, polls: attempt };
+    } catch (error) {
+      if (error.status === 404) return { deleted: true, polls: attempt };
+    }
+    if (attempt >= polls) throw new Error(`Meeting ${meetingId} still lists files after whole-meeting delete`);
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
 }
