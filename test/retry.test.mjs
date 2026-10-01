@@ -13,7 +13,7 @@ function setup(t) {
   return new ActivityService(repo);
 }
 
-const details = { topic: 'Retry Meeting', meetingId: '42', meetingUuid: 'uuid', recordingFileId: 'file' };
+const details = { topic: 'Retry Meeting', meetingId: '87850645500', meetingUuid: '1in20/L2QcWjtTp5hFfzcQ==', recordingFileId: 'file' };
 
 test('succeeds on the first attempt without a retry row', async t => {
   const activities = setup(t);
@@ -21,9 +21,12 @@ test('succeeds on the first attempt without a retry row', async t => {
   const result = await runTranscriptJob({
     activities, details, endpoint: '/zoom/transcripts', type: 'recording.transcript_completed',
     maxAttempts: 2, retryDelayMs: 1,
-    processor: async () => ({ status: 'succeeded', metadata: { summary: 'Done' } }),
+    processor: async (key) => {
+      calls += 1;
+      assert.equal(key, details.meetingUuid, 'retry runner passes the UUID, not the numeric ID');
+      return { status: 'succeeded', metadata: { summary: 'Done' } };
+    },
   });
-  calls += 1;
   assert.equal(calls, 1);
   assert.equal(result.status, 'succeeded');
   assert.equal(activities.list().length, 1);

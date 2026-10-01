@@ -4,20 +4,25 @@ import { listAssets, downloadTranscript, downloadAssets, verifyLocal, deleteMeet
 import { transcriptDetails } from './zoom.mjs';
 import { appendJsonLine } from './pi.mjs';
 
-// One meeting in, everything out: download every completed asset starting
-// with the transcript, process the transcript as soon as it lands, and once
-// every asset verifies locally, delete the whole meeting from Zoom — no
-// per-file deletion round-trips.
+// One meeting instance in, everything out: the instance key is the meeting
+// UUID from the webhook payload (or the stored activity metadata), never the
+// numeric meeting ID. The numeric ID rides along in metadata for display only.
+// Downloads the transcript first, processes it as soon as it lands, downloads
+// the remaining assets in parallel, and once every asset verifies locally,
+// deletes the whole instance from Zoom — never per-file deletion.
 export function createMeetingJob(config, dependencies = {}) {
   const list = dependencies.listAssets ?? listAssets;
   const fetchOne = dependencies.downloadTranscript ?? downloadTranscript;
   const fetchMedia = dependencies.downloadAssets ?? downloadAssets;
   const confirm = dependencies.verifyLocal ?? verifyLocal;
   const remove = dependencies.deleteMeeting ?? deleteMeeting;
-  return async function processMeeting(meetingId, requestId = randomUUID()) {
-    const index = await list(config, meetingId);
+  return async function processMeeting(meetingUuid, requestId = randomUUID()) {
+    const index = await list(config, meetingUuid);
     const details = transcriptDetails({ event: 'recording.transcript_completed', object: index.meeting });
-    details.meetingId = String(meetingId);
+    // The numeric ID stays in metadata for display/linking; the UUID is the
+    // fetch/delete key. Prefer the API response but keep the stored value.
+    if (!details.meetingUuid) details.meetingUuid = String(meetingUuid);
+    details.meetingId = details.meetingId || (index.meetingId != null ? String(index.meetingId) : '');
 
     // The transcript downloads first; the agent starts as soon as it lands
     // while the remaining assets download in parallel with the agent run.
@@ -29,14 +34,14 @@ export function createMeetingJob(config, dependencies = {}) {
     const media = mediaResult.map(item => ({ ...item, deleted: false }));
     if (transcriptResult.status !== 'succeeded' || failed.length) {
       const errors = [transcriptResult.error, ...failed.map(item => `${item.name ?? item.id}: ${item.error}`)].filter(Boolean);
-      const result = { ...transcriptResult, metadata: { ...transcriptResult.metadata, meetingId: String(meetingId), topic: details.topic, media, deletedMeeting: false }, error: errors.join('; ') };
+      const result = { ...transcriptResult, metadata: { ...transcriptResult.metadata, meetingUuid: details.meetingUuid, meetingId: details.meetingId, topic: details.topic, media, deletedMeeting: false }, error: errors.join('; ') };
       if (config.piLogPath) appendJsonLine(config.piLogPath, { event: 'meeting_finished', requestId, ...result });
       return result;
     }
 
     confirm(index);
-    const deletion = await remove(config, meetingId);
-    const result = { ...transcriptResult, metadata: { ...transcriptResult.metadata, meetingId: String(meetingId), topic: details.topic, media, deletedMeeting: deletion.deleted, deletePolls: deletion.polls } };
+    const deletion = await remove(config, details.meetingUuid || String(meetingUuid));
+    const result = { ...transcriptResult, metadata: { ...transcriptResult.metadata, meetingUuid: details.meetingUuid, meetingId: details.meetingId, topic: details.topic, media, deletedMeeting: deletion.deleted, deletePolls: deletion.polls } };
     if (config.piLogPath) appendJsonLine(config.piLogPath, { event: 'meeting_finished', requestId, ...result });
     return result;
   };

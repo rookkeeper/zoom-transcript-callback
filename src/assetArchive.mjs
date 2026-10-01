@@ -2,7 +2,7 @@ import { createWriteStream, existsSync, mkdirSync, statSync, renameSync, rmSync 
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { zoomApi, loadStoredTokens } from './zoomOAuth.mjs';
-import { zoomAuth, assetNamer, isTranscriptFile, meetingAssets, safeTopic, DEFAULT_ZOOM_ROOT } from './zoomDownloads.mjs';
+import { zoomAuth, assetNamer, isTranscriptFile, meetingAssets, meetingRecordingsPath, resolveInstanceDirectory, safeTopic, DEFAULT_ZOOM_ROOT } from './zoomDownloads.mjs';
 
 export async function retry(operation, attempts = 3) {
   for (let attempt = 1; ; attempt++) {
@@ -17,14 +17,20 @@ export async function retry(operation, attempts = 3) {
 // Fetch one completed asset listing covering both of Zoom's collections:
 // recording_files (layouts, audio, chat, timeline, captions, transcript) and
 // participant_audio_files (one M4A per participant).
-export async function listAssets(config, meetingId) {
-  const meeting = await retry(() => zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`));
-  const directory = join(DEFAULT_ZOOM_ROOT, `${(meeting.start_time ?? '').slice(0,10)} ${safeTopic(meeting.topic)}`);
-  mkdirSync(directory, { recursive: true });
+// Asset fetch is keyed by meeting UUID (double-encoded in the API path), never
+// the numeric meeting ID: one ID can host several recording instances while
+// the UUID identifies exactly one. The numeric ID stays in `meeting` metadata
+// for display/linking only.
+export async function listAssets(config, meetingUuid, options = {}) {
+  const meeting = await retry(() => zoomApi(zoomAuth(config), meetingRecordingsPath(meetingUuid)));
+  // Tests (and manual runs) can redirect the folder root; production uses the
+  // shared Zoom library. A bare string third argument is a legacy root override.
+  const root = typeof options === 'string' ? options : (options.root ?? DEFAULT_ZOOM_ROOT);
+  const directory = resolveInstanceDirectory(root, `${(meeting.start_time ?? '').slice(0,10)} ${safeTopic(meeting.topic)}`, meeting.uuid ?? meetingUuid);
   const files = meetingAssets(meeting).filter(f => f.status === 'completed');
   const transcript = files.find(isTranscriptFile);
-  if (!transcript) throw new Error(`Meeting ${meetingId} has no completed transcript`);
-  return { meeting, meetingId, directory, transcript, files, nameOf: assetNamer(files) };
+  if (!transcript) throw new Error(`Meeting ${meetingUuid} has no completed transcript`);
+  return { meeting, meetingUuid: String(meetingUuid), meetingId: meeting.id != null ? String(meeting.id) : undefined, directory, transcript, files, nameOf: assetNamer(files) };
 }
 
 export async function downloadTranscript(config, index, file) {
@@ -79,17 +85,17 @@ export function verifyLocal(index) {
 // Whole-meeting deletion is eventually consistent: Zoom returns success while
 // the meeting endpoint still lists files. Poll until it 404s so a retry never
 // refetches aliases of files that are already gone.
-export async function deleteMeeting(config, meetingId, { polls = 6, intervalMs = 15000 } = {}) {
-  await retry(() => zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`, { method: 'DELETE' }));
+export async function deleteMeeting(config, meetingUuid, { polls = 6, intervalMs = 15000 } = {}) {
+  await retry(() => zoomApi(zoomAuth(config), meetingRecordingsPath(meetingUuid), { method: 'DELETE' }));
   for (let attempt = 1; ; attempt++) {
     try {
-      const current = await zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`);
+      const current = await zoomApi(zoomAuth(config), meetingRecordingsPath(meetingUuid));
       const remaining = [...(current.recording_files ?? []), ...(current.participant_audio_files ?? [])];
       if (!remaining.length) return { deleted: true, polls: attempt };
     } catch (error) {
       if (error.status === 404) return { deleted: true, polls: attempt };
     }
-    if (attempt >= polls) throw new Error(`Meeting ${meetingId} still lists files after whole-meeting delete`);
+    if (attempt >= polls) throw new Error(`Meeting ${meetingUuid} still lists files after whole-meeting delete`);
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
 }

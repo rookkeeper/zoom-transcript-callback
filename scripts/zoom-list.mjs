@@ -4,6 +4,7 @@
 // Prints one line per recording file: meeting date, topic, file type, size.
 import { loadConfig } from "../src/config.mjs";
 import { zoomApi } from "../src/zoomOAuth.mjs";
+import { meetingRecordingsPath } from "../src/zoomDownloads.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -36,7 +37,7 @@ const asJson = Boolean(flag("--json"));
 const meetings = await zoomApi(auth, `/v2/users/${encodeURIComponent(userId)}/recordings?${params}`);
 const rows = [];
 for (const meeting of meetings.meetings ?? []) {
-  const files = await zoomApi(auth, `/v2/meetings/${meeting.id}/recordings`);
+  const files = await zoomApi(auth, meetingRecordingsPath(meeting.uuid ?? meeting.id));
   for (const file of files.recording_files ?? []) {
     rows.push({
       start: meeting.start_time,

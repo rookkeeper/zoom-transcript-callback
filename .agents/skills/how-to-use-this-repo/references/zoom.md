@@ -140,27 +140,27 @@ These are the operations the agent can perform when the user asks about Zoom. Al
   ```bash
   node scripts/zoom-list.mjs --from YYYY-MM-DD --to YYYY-MM-DD [--json]
   ```
-- **Result:** One row per recording file with meeting date, topic, meeting ID, file type, size, and status. The script uses `/v2/users/me/recordings` and `/v2/meetings/{id}/recordings`.
+- **Result:** One row per recording file with meeting date, topic, meeting ID, meeting UUID, file type, size, and status. The script uses `/v2/users/me/recordings` and the double-encoded meeting UUID in `/v2/meetings/{uuid}/recordings`.
 
 ### Download recording assets
 
 - **User request:** "download the Zoom video," "download the recordings," or "save the meeting assets locally."
 - **Procedure:** Run:
   ```bash
-  node scripts/zoom-download.mjs --meeting <meetingId> [--dir <destination>]
+  node scripts/zoom-download.mjs --meeting <meetingUuid> [--dir <destination>]
   ```
-  By default, files go under `John's Stuff/Zoom/<date> <topic>/`.
+  By default, files go under `John's Stuff/Zoom/<date> <topic>/` (a `.zoom-meeting-uuid` marker claims the folder for one instance; a second instance with the same date/topic lands in `<date> <topic> 2`, and so on).
 - **Result:** Every completed asset is downloaded: video, audio, transcript, chat, timeline, captions, and related files. The script verifies each file by completing the stream and reporting its size.
-- **Operational notes:** Re-run a meeting download after flaky large-file chunks. Use the meeting ID, not only the date/topic, to disambiguate repeated topics and meetings crossing midnight UTC.
+- **Operational notes:** Re-run a meeting download after flaky large-file chunks. Pass the meeting UUID, not the numeric meeting ID, to disambiguate repeated topics, reused IDs (e.g. a PMI hosting several instances), and meetings crossing midnight UTC.
 
 ### Delete cloud recording assets
 
 - **User request:** "delete the Zoom recording" or "remove the cloud recording after downloading."
 - **Procedure:** Use the downloader's double opt-in flags:
   ```bash
-  node scripts/zoom-download.mjs --meeting <meetingId> --delete --yes
+  node scripts/zoom-download.mjs --meeting <meetingUuid> --delete --yes
   ```
-- **Safety:** Confirm the meeting ID, destination, and successful local verification immediately before deletion. The script refuses `--delete` without `--yes` and leaves the cloud copy if any download fails.
+- **Safety:** Confirm the meeting UUID, destination, and successful local verification immediately before deletion. The script refuses `--delete` without `--yes` and leaves the cloud copy if any download fails.
 - **Result:** The cloud recording is deleted only after every completed asset verifies locally.
 
 ### Retry transcript processing
@@ -168,9 +168,9 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 - **User request:** "retry the failed transcript," "rerun that meeting," or "process the failed callback again."
 - **Procedure:** Run:
   ```bash
-  node scripts/manual-retry.mjs <meetingId>
+  node scripts/manual-retry.mjs <meetingUuid>
   ```
-- **Result:** A fresh activity row is created and linked to the failed row. Supply the meeting ID—not the activity ID—to `scripts/manual-retry.mjs`; it finds the failed/incomplete activity for that meeting and sends the same ID through the shared asset workflow. The workflow re-fetches/reuses assets, verifies API names against the filesystem, starts Pi from the transcript, and deletes only non-transcript cloud assets after verification.
+- **Result:** A fresh activity row is created and linked to the failed row. Supply the meeting UUID—not the activity ID—to `scripts/manual-retry.mjs`; it finds the failed/incomplete activity for that instance (`metadata.meetingUuid`) and sends the same UUID through the shared asset workflow. The workflow re-fetches/reuses assets, verifies API names against the filesystem, starts Pi from the transcript, and deletes the whole instance from Zoom after verification.
 
 ### Inspect callback history
 
@@ -187,11 +187,11 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 
 - **Endpoint:** `https://dev-callbacks.arcturus-labs.com/zoom/transcripts` forwards to local `POST /zoom/transcripts`.
 - **Verification:** `src/callback.mjs` verifies Zoom's HMAC signature and timestamp using `ZOOM_WEBHOOK_SECRET`. It answers `endpoint.url_validation` and returns `202` before model work.
-- **Processing:** `src/zoom.mjs` extracts meeting metadata and the meeting ID. `src/zoomDownloads.mjs` uses the General-app OAuth API to retrieve every completed recording asset into `John's Stuff/Zoom/<date> <topic>/`. `src/retry.mjs` runs the Pi processor, retrying post-spawn failures according to `PI_MAX_ATTEMPTS` and `PI_RETRY_DELAY_MS`.
+- **Processing:** `src/zoom.mjs` extracts meeting metadata, the meeting UUID, and the numeric meeting ID (display only). `src/zoomDownloads.mjs` uses the General-app OAuth API with the double-encoded UUID (`/v2/meetings/{uuid}/recordings`) to retrieve every completed recording asset into `John's Stuff/Zoom/<date> <topic>/` (incremented to `<date> <topic> 2`, … when another instance already claimed the base folder). `src/retry.mjs` passes `details.meetingUuid` into the processor and retries post-spawn failures according to `PI_MAX_ATTEMPTS` and `PI_RETRY_DELAY_MS`.
 - **Pi work:** `src/processor.mjs` retrieves the meeting assets before starting Pi, then starts Pi in an isolated directory under `PI_WORK_ROOT`; the prompt is hardwired in `src/zoomPrompt.mjs` and only identifies the callback, supplies callback data, and points Pi to this skill and the loaded skills.
 - **Transcript callback workflow:** When a `recording.transcript_completed` callback arrives:
-  1. Call `createMeetingJob(config)(meetingId)`. One meeting in, everything out: the shared workflow fetches every completed asset across both of Zoom's collections (`recording_files` and `participant_audio_files`, so per-participant audio is covered), downloads the transcript first, and starts Pi as soon as it lands. The remaining assets download in parallel with three workers while Pi runs.
-  2. Only after every completed asset verifies locally (API names against non-empty files on disk) does anything leave Zoom — and then it leaves all at once: the workflow deletes the whole meeting (`DELETE /v2/meetings/{id}/recordings`), which also removes the transcript, and polls until the meeting endpoint stops listing files. Whole-meeting deletion is eventually consistent: Zoom answers success while the files are still briefly listed, so a single re-list cannot prove removal.
+  1. Call `createMeetingJob(config)(meetingUuid)`. One meeting instance in, everything out: the shared workflow fetches every completed asset for that UUID across both of Zoom's collections (`recording_files` and `participant_audio_files`, so per-participant audio is covered), downloads the transcript first, and starts Pi as soon as it lands. The remaining assets download in parallel with three workers while Pi runs.
+  2. Only after every completed asset verifies locally (API names against non-empty files on disk) does anything leave Zoom — and then it leaves all at once: the workflow deletes the whole meeting instance (`DELETE /v2/meetings/{uuid}/recordings`), which also removes the transcript, and polls until the meeting endpoint stops listing files. Whole-meeting deletion is eventually consistent: Zoom answers success while the files are still briefly listed, so a single re-list cannot prove removal.
   3. Downloads retry independently with bounded backoff. Files reuse requires an exact API-size match, not merely a nonempty file. Activity status follows the transcript outcome; per-file results expose download failures separately.
   3. Pass the downloaded transcript path and meeting folder to Pi.
   4. Use the `how-to-use-peeps-obsidian` skill to create a new event document for the meeting.
@@ -239,10 +239,11 @@ When adding one, record its schedule and timezone, trigger and inputs, the opera
 
 ### Batch download learnings
 
-- Repeated date/topic names need a `[meetingId]` suffix when organizing local folders.
-- A meeting that crosses midnight UTC can appear under two dates with identical filenames; verify by meeting ID.
+- Same-named local folders disambiguate by instance: the first instance claims `<date> <topic>/` with a `.zoom-meeting-uuid` marker, later instances use `<date> <topic> 2/`, `<date> <topic> 3/`, …, and re-runs reuse the folder whose marker matches their UUID.
+- A meeting that crosses midnight UTC can appear under two dates with identical filenames; verify by meeting UUID.
+- Recording fetch and cloud deletion are keyed by meeting UUID (double-encoded in the API path: `encodeURIComponent(encodeURIComponent(uuid))`), never the numeric meeting ID — one numeric ID can host several instances (e.g. a reused PMI), while the UUID identifies exactly one.
 - The list flag parser accepts both `--flag value` and `--flag=value` forms.
 - Completed large files can fail during transfer; rerun the meeting download rather than deleting the cloud copy. The meeting is deleted whole only after every completed asset verifies locally, so failures never strand a partial delete.
-- Whole-meeting deletion (`DELETE /v2/meetings/{id}/recordings`) is eventually consistent: Zoom returns success while the meeting endpoint still briefly lists files. Poll until the endpoint 404s or returns an empty list before treating the meeting as gone.
+- Whole-meeting deletion (`DELETE /v2/meetings/{uuid}/recordings`) is eventually consistent: Zoom returns success while the meeting endpoint still briefly lists files. Poll until the endpoint 404s or returns an empty list before treating the meeting as gone.
 - Prefer the whole-meeting delete over per-file deletion (`DELETE .../recordings/{fileId}`); the latter is only proof of the API shape during exploration, not a production path. The `cloud_recording:delete:meeting_recording` scope covers the whole-meeting delete.
-- Zoom splits a meeting's recording assets across two top-level collections: `recording_files` and `participant_audio_files`. Walking only `recording_files` silently leaves one M4A per participant in the cloud forever. Both collections download and delete through the same per-file endpoints (`GET`/`DELETE /v2/meetings/{id}/recordings/{fileId}`), and participant audio files are identified by their human `file_name`, since they carry no `recording_type`.
+- Zoom splits a meeting's recording assets across two top-level collections: `recording_files` and `participant_audio_files`. Walking only `recording_files` silently leaves one M4A per participant in the cloud forever. Both collections download through the whole-meeting endpoints (`GET`/`DELETE /v2/meetings/{uuid}/recordings`), and participant audio files are identified by their human `file_name`, since they carry no `recording_type`.

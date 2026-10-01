@@ -44,7 +44,7 @@ export async function runTranscriptJob({
       });
     }
     // eslint-disable-next-line no-await-in-loop
-    lastResult = await activities.run(id, () => processor(details.meetingId, id));
+    lastResult = await activities.run(id, () => processor(details.meetingUuid, id));
     if (lastResult.status === "succeeded" || !isRetryable(lastResult) || attempt === attempts) {
       return { ...lastResult, activityId: id, attempts: attempt };
     }
