@@ -25,8 +25,8 @@ test('transcript-first: agent starts after its download and the meeting deletes 
       const media = { id: 'v' };
       return { meeting: { id: 42 }, meetingId: '42', transcript, files: [transcript, media], nameOf: f => f.id };
     },
-    downloadAsset: async () => { events.push('transcript'); return '/tmp/t.vtt'; },
-    downloadMedia: async () => { events.push('media'); return [{ id: 'v', name: 'v', status: 'succeeded' }]; },
+    downloadTranscript: async () => { events.push('transcript'); return '/tmp/t.vtt'; },
+    downloadAssets: async () => { events.push('media'); return [{ id: 'v', name: 'v', status: 'succeeded' }]; },
     verifyLocal: () => { events.push('verify'); return ['t', 'v']; },
     deleteMeeting: async () => { events.push('delete'); return { deleted: true, polls: 1 }; },
     agent: async () => ({ status: 'succeeded', metadata: { summary: 'done' } }),
@@ -45,8 +45,8 @@ test('never deletes the meeting when a media download fails', async () => {
       const media = { id: 'v' };
       return { meeting: { id: 42 }, meetingId: '42', transcript, files: [transcript, media], nameOf: f => f.id };
     },
-    downloadAsset: async () => '/tmp/t.vtt',
-    downloadMedia: async () => [{ id: 'v', name: 'v', status: 'failed', error: 'boom' }],
+    downloadTranscript: async () => '/tmp/t.vtt',
+    downloadAssets: async () => [{ id: 'v', name: 'v', status: 'failed', error: 'boom' }],
     verifyLocal: () => { throw new Error('should not verify'); },
     deleteMeeting: async () => { deleted = true; return { deleted: true, polls: 1 }; },
     agent: async () => ({ status: 'succeeded', metadata: {} }),

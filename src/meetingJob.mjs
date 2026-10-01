@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createProcessor } from './processor.mjs';
-import { listAssets, downloadAsset, downloadMedia, verifyLocal, deleteMeeting } from './assetArchive.mjs';
+import { listAssets, downloadTranscript, downloadAssets, verifyLocal, deleteMeeting } from './assetArchive.mjs';
 import { transcriptDetails } from './zoom.mjs';
 import { appendJsonLine } from './pi.mjs';
 
@@ -10,8 +10,8 @@ import { appendJsonLine } from './pi.mjs';
 // per-file deletion round-trips.
 export function createMeetingJob(config, dependencies = {}) {
   const list = dependencies.listAssets ?? listAssets;
-  const fetchOne = dependencies.downloadAsset ?? downloadAsset;
-  const fetchMedia = dependencies.downloadMedia ?? downloadMedia;
+  const fetchOne = dependencies.downloadTranscript ?? downloadTranscript;
+  const fetchMedia = dependencies.downloadAssets ?? downloadAssets;
   const confirm = dependencies.verifyLocal ?? verifyLocal;
   const remove = dependencies.deleteMeeting ?? deleteMeeting;
   return async function processMeeting(meetingId, requestId = randomUUID()) {

@@ -27,7 +27,7 @@ export async function listAssets(config, meetingId) {
   return { meeting, meetingId, directory, transcript, files, nameOf: assetNamer(files) };
 }
 
-export async function downloadAsset(config, index, file) {
+export async function downloadTranscript(config, index, file) {
   const path = join(index.directory, index.nameOf(file));
   const api = Number(file.file_size) || 0;
   if (existsSync(path) && statSync(path).size > 0 && (!api || statSync(path).size === api)) return path;
@@ -59,9 +59,9 @@ export async function runWithWorkers(items, workers, operation) {
   return results;
 }
 
-export function downloadMedia(config, index) {
+export function downloadAssets(config, index) {
   return runWithWorkers(index.files.filter(f => f !== index.transcript), 3, async file => {
-    const path = await downloadAsset(config, index, file);
+    const path = await downloadTranscript(config, index, file);
     return { id: file.id, name: index.nameOf(file), status: 'succeeded', bytes: statSync(path).size };
   });
 }

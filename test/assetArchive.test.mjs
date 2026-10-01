@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { downloadAsset, listAssets, downloadMedia, verifyLocal } from '../src/assetArchive.mjs';
+import { downloadTranscript, listAssets, downloadAssets, verifyLocal } from '../src/assetArchive.mjs';
 import { storeTokens } from '../src/zoomOAuth.mjs';
 
 // Zoom's per-participant audio lives in a separate top-level collection, not in
@@ -65,8 +65,8 @@ test('downloads every collection without deleting anything per-file', async t =>
   const config = storeConfig(directory);
   const index = await listAssets(config, '42', join(directory, 'assets'));
   // Transcript-first, then everything else — the production order.
-  await downloadAsset(config, index, index.transcript);
-  const results = await downloadMedia(config, index);
+  await downloadTranscript(config, index, index.transcript);
+  const results = await downloadAssets(config, index);
 
   assert.equal(results.length, 3, 'transcript is excluded from the media branch');
   assert.ok(results.every(r => r.status === 'succeeded'), JSON.stringify(results));
@@ -85,8 +85,8 @@ test('replaces a partial legacy file and reuses the verified local copy on retry
   const original = globalThis.fetch; t.after(() => { globalThis.fetch = original; });
   let downloads = 0;
   globalThis.fetch = async () => { downloads++; return new Response('hello'); };
-  await downloadAsset(config, index, file);
-  await downloadAsset(config, index, file);
+  await downloadTranscript(config, index, file);
+  await downloadTranscript(config, index, file);
   assert.equal(downloads, 1);
   assert.equal(existsSync(join(directory, 'video.mp4.part')), false);
 });
@@ -98,6 +98,6 @@ test('HTTP failure does not create final file or delete cloud copy', async t => 
   storeTokens(config.zoomOAuthStorePath, { access_token: 'fake' });
   const original = globalThis.fetch; t.after(() => { globalThis.fetch = original; });
   globalThis.fetch = async () => new Response(null, { status: 403 });
-  await assert.rejects(() => downloadAsset(config, { directory, nameOf: () => 'video.mp4' }, { id: 'a', download_url: 'https://assets.test' }), /403/);
+  await assert.rejects(() => downloadTranscript(config, { directory, nameOf: () => 'video.mp4' }, { id: 'a', download_url: 'https://assets.test' }), /403/);
   assert.equal(existsSync(join(directory, 'video.mp4')), false);
 });
