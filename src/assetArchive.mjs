@@ -2,7 +2,7 @@ import { createWriteStream, existsSync, mkdirSync, statSync, renameSync, rmSync,
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { zoomApi, loadStoredTokens } from './zoomOAuth.mjs';
-import { zoomAuth, recordingName, safeTopic, DEFAULT_ZOOM_ROOT } from './zoomDownloads.mjs';
+import { zoomAuth, assetNamer, isTranscriptFile, meetingAssets, safeTopic, DEFAULT_ZOOM_ROOT } from './zoomDownloads.mjs';
 import { appendJsonLine } from './pi.mjs';
 
 export async function retry(operation, attempts = 3) {
@@ -19,13 +19,12 @@ export async function getRecordingIndex(config, meetingId, destination) {
   const meeting = await retry(() => zoomApi(zoomAuth(config), `/v2/meetings/${encodeURIComponent(meetingId)}/recordings`));
   const directory = destination ?? join(DEFAULT_ZOOM_ROOT, `${(meeting.start_time ?? '').slice(0,10)} ${safeTopic(meeting.topic)}`);
   mkdirSync(directory, { recursive: true });
-  const files = (meeting.recording_files ?? []).filter(f => f.status === 'completed');
-  const transcript = files.find(f => f.file_type === 'TRANSCRIPT' || f.recording_type === 'audio_transcript');
+  const files = meetingAssets(meeting).filter(f => f.status === 'completed');
+  const transcript = files.find(isTranscriptFile);
   if (!transcript) throw new Error('No completed transcript');
-  // Disambiguate layouts with repeated names by recording ID.
-  const names = files.map(recordingName);
-  const nameOf = file => names.filter(n => n === recordingName(file)).length > 1 ? `${file.id}-${recordingName(file)}` : recordingName(file);
-  return { meeting, meetingId, directory, transcript, files, nameOf };
+  // Walk both Zoom collections (layouts and per-participant audio) and
+  // disambiguate any repeated names by file ID.
+  return { meeting, meetingId, directory, transcript, files, nameOf: assetNamer(files) };
 }
 
 function valid(path, file) {
