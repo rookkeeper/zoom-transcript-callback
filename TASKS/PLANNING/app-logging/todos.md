@@ -1,19 +1,20 @@
 # Task execution: Consistent application logging with actionable processor errors
 
 Official task: `TASKS/KANBAN/app-logging.md`
-Planning directory: `TASKS/WIP/app-logging/`
+Planning directory: `TASKS/PLANNING/app-logging/`
 Worker/session: <assigned identity>
 Worktree: `<repo>/.worktrees/app-logging` (provisioned by orchestrator)
 Branch: `app-logging`
 Base commit: <committed main SHA>
 
-Orchestrator: copy this template to `TASKS/WIP/<task>/todos.md` when planning begins. Fill in a descriptive, ordered checkbox plan after brainstorming, including nested steps where useful. Replace placeholder paths. Worker: maintain the checklist and progress; escalate unresolved requirements instead of inventing them.
+Existing draft retained; implementation is not dispatched. Finalize this ordered checkbox plan only after explicit brainstorming completion, including QA and overlap decisions. At dispatch, move the directory to `TASKS/WIP/YYYY-MM-DD-app-logging/` using the actual dispatch date and update this header, brainstorm, and card before provisioning. Worker: maintain the checklist and escalate unresolved requirements.
 
 ## Checklist
 
 - [ ] Review task plan, project instructions, PRODUCT/, and ARCHITECTURE/.
-- [ ] Create TASKS/WIP/app-logging/brainstorm.md and TASKS/WIP/app-logging/todos.md, perform brainstorming and todo list generation, and update the paths here (orchestrator). — done (brainstorm); todos pending Round 1 answers.
-- [ ] Review all TASKS/WIP/app-logging documents (worker).
+- [ ] Finalize TASKS/PLANNING/app-logging/brainstorm.md and todos.md after explicit brainstorming completion (orchestrator). — Round 1 answers recorded; overlap and QA planning remain deferred.
+- [ ] At dispatch, move planning artifacts to dispatch-dated WIP, update all path mentions, and commit before provisioning (orchestrator).
+- [ ] Review all documents at the supplied dated WIP path (worker).
 - [ ] Before worker launch: verify clean, committed main; create the matching task branch/worktree; verify planning documents in it; launch worker there (orchestrator).
 - [ ] Verify assigned worktree and branch before task edits; stop if launched elsewhere, never create a worktree or work from main (worker).
 - [ ] Confirm the task is appropriately sized; return to orchestrator if it needs decomposition.
@@ -23,8 +24,9 @@ Orchestrator: copy this template to `TASKS/WIP/<task>/todos.md` when planning be
 - [ ] `npm test` passes; failure-path coverage added.
 - [ ] QA deferred (task not starting immediately; plan QA at kickoff).
 - [ ] Sync current main, resolve conflicts, and repeat relevant validation.
+- [ ] If requested, prepare the isolated user walkthrough and obtain approval before integration.
 - [ ] Merge locally when ready; update shared task state/artifacts.
-- [ ] Record outcome and evidence; clean up worktree.
+- [ ] Record outcome and verification evidence; move artifacts and the Markdown card into TASKS/COMPLETE/YYYY-MM-DD-app-logging/ using the dispatch date, update links, and clean up worktree.
 
 ## Progress and decisions
 
@@ -32,4 +34,4 @@ Orchestrator: copy this template to `TASKS/WIP/<task>/todos.md` when planning be
 
 ## Blockers
 
-- None yet — pending user answers in `TASKS/WIP/app-logging/brainstorm.md` Round 1.
+- Before dispatch: resolve deferred `success-ledger-all-exits` overlap, confirm `simplify-architecture` prerequisite, and plan independent product verification. Round 1 answers are recorded in `TASKS/PLANNING/app-logging/brainstorm.md`; this maintenance does not settle the remaining decisions.

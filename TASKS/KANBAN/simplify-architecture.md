@@ -22,18 +22,19 @@ Reduce the number of layers / collaborators a request passes through (`callback 
 
 ## Planning artifacts
 
-To be created at kickoff (`TASKS/WIP/simplify-architecture/` with `brainstorm.md` + `todos.md`). Deliberately no WIP directory yet — per user instruction, brainstorm only when ready to start the task.
+To be created at kickoff (`TASKS/PLANNING/simplify-architecture/` with `brainstorm.md` + `todos.md`). Deliberately no planning directory yet — per user instruction, brainstorm only when ready to start the task. Move to dispatch-dated WIP only when dispatched; see [task guidance](../README.md).
 
 ## Planning and implementation checklist
 
 - [ ] Review relevant PRODUCT/ and ARCHITECTURE/ guidance.
 - [ ] Orchestrator: create brainstorm.md and todos.md from templates, gather user details, and iterate inline Q&A until both parties agree the requirements and QA plan.
-- [ ] Orchestrator: populate the execution checklist and verify both WIP files before dispatch.
-- [ ] Worker: review all TASKS/WIP/simplify-architecture documents (worker).
+- [ ] Orchestrator: after explicit brainstorming completion, populate the execution checklist and verify both planning documents; move to TASKS/WIP/YYYY-MM-DD-simplify-architecture/ at dispatch and update path mentions.
+- [ ] Worker: review all documents at the supplied dispatch-dated WIP path.
 - [ ] Before worker launch: verify clean, committed main; create the matching task branch/worktree; verify planning documents in it; launch worker there (orchestrator).
 - [ ] Verify assigned worktree and branch before task edits; stop if launched elsewhere, never create a worktree or work from main (worker).
 - [ ] Run agreed tests and independent product QA.
-- [ ] Record outcome and evidence; update this card and link completed artifacts.
+- [ ] If requested, obtain approval of the isolated user walkthrough before integration.
+- [ ] Record outcome and evidence; move artifacts and this card to TASKS/COMPLETE/YYYY-MM-DD-simplify-architecture/ with the same dispatch date; update links.
 
 ## Notes / activity
 

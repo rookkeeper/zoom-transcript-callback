@@ -46,13 +46,14 @@ Route requests to the matching section:
 - `scripts/` — `run-server.sh` (start/restart), `manual-retry.mjs` (re-run a failed job), `send-fake-request.sh` (signed local test), `zoom-download.mjs` (pull recording assets via API).
 - `ui/` — local history screen served on the events port (`/events`).
 - `ARCHITECTURE/` — server, database, UI design notes. `PRODUCT/overview.md` — product intent.
-- `TASKS/` — the task system. `KANBAN/` official cards, `WIP/<task>/{brainstorm.md,todos.md}` for active planning, `COMPLETE/<task>/` for finished artifacts and `outcome.md`. `BACKLOG.md` at the root is quick capture, not the board.
+- `TASKS/` — see `TASKS/README.md`: `KANBAN/` official cards; undated `PLANNING/<task>/{brainstorm.md,todos.md}`; dispatch-dated `WIP/YYYY-MM-DD-<task>/`; `COMPLETE/YYYY-MM-DD-<task>/` for finished artifacts, archived cards, and `outcome.md`. Keep the dispatch date at completion. `BACKLOG.md` is quick capture, not the board.
 - `data/` (`events.sqlite`, `zoom-oauth.json`) and `logs/` (`zoom-transcript-pi.jsonl`, `zoom-transcript-success.jsonl`) are runtime state: gitignored, never commit.
 - `.env` holds secrets (gitignored). `.env.example` is the audited list of required variables — keep it in sync when adding or removing `process.env.*` reads.
 
 ## Rules for every change
 
-- Follow the `software-factory` skill (`.agents/skills/software-factory`, symlinked and gitignored): promote the work to a card in `TASKS/KANBAN/`, plan it in `TASKS/WIP/<task>/` with `brainstorm.md` and `todos.md`, do the work on branch/worktree `<task>`, TDD new behavior, then integrate, record `outcome.md`, and clean up.
+- The `software-factory` skill (`.agents/skills/software-factory`, symlinked and gitignored) owns workflow guidance alongside project constraints. Follow its planning, dispatch, verification, integration, and user-directed workflow procedures; see `TASKS/README.md` for local paths and legacy exceptions.
+- Load the applicable factory references: [backend service](../software-factory/references/how-we-build/backend-service.md), [web frontend](../software-factory/references/how-we-build/web-frontend.md), and [quality assurance](../software-factory/references/quality-assurance.md). These are recommendations, not a mandate to replace this repo's framework-free UI. WebMCP remains a pending product choice (see `TASKS/README.md`); no native Mac app/SDEF surface exists here.
 - Never log or commit secrets, download tokens, or transcript content. Tests use fake tokens and in-memory databases.
 - When adding an env var, add it to `.env.example` with a comment in the same commit.
 

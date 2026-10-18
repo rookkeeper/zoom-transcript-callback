@@ -1,7 +1,7 @@
 # Brainstorm: Consistent application logging with actionable processor errors
 
 Official task: `TASKS/KANBAN/app-logging.md`
-Planning directory: `TASKS/WIP/app-logging/`
+Planning directory: `TASKS/PLANNING/app-logging/` (move to dispatch-dated WIP when dispatched)
 Execution plan: [todos.md](./todos.md)
 Status: planning
 

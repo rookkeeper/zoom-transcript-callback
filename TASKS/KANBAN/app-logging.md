@@ -29,21 +29,22 @@ Any failed activity row must lead to its cause within one lookup: the UI/ledger 
 
 ## Planning artifacts
 
-Planning directory: `TASKS/WIP/app-logging/`
+Planning directory: `TASKS/PLANNING/app-logging/` (undispatched; see [task guidance](../README.md))
 
 ## Planning and implementation checklist
 
 - [ ] Review relevant PRODUCT/ and ARCHITECTURE/ guidance.
 - [ ] Orchestrator: create brainstorm.md and todos.md from templates, gather user details, and iterate inline Q&A until both parties agree the requirements and QA plan.
-- [ ] Orchestrator: populate the execution checklist and verify both WIP files before dispatch.
-- [ ] Worker: review all TASKS/WIP/app-logging documents (worker).
+- [ ] Orchestrator: after explicit brainstorming completion, finalize the execution checklist and verify both planning documents; move to TASKS/WIP/YYYY-MM-DD-app-logging/ at dispatch and update path mentions.
+- [ ] Worker: review all documents at the supplied dispatch-dated WIP path.
 - [ ] Before worker launch: verify clean, committed main; create the matching task branch/worktree; verify planning documents in it; launch worker there (orchestrator).
 - [ ] Verify assigned worktree and branch before task edits; stop if launched elsewhere, never create a worktree or work from main (worker).
 - [ ] Run agreed tests and independent product QA.
-- [ ] Record outcome and evidence; update this card and link completed artifacts.
+- [ ] If requested, obtain approval of the isolated user walkthrough before integration.
+- [ ] Record outcome and evidence; move artifacts and this card to TASKS/COMPLETE/YYYY-MM-DD-app-logging/ with the same dispatch date; update links.
 
 ## Notes / activity
 
-- 2026-10-01: triaged from the "Ride Along – John builds" failure (meeting `87850645500`). Triggering diagnosis in `TASKS/WIP/app-logging/brainstorm.md`.
+- 2026-10-01: triaged from the "Ride Along – John builds" failure (meeting `87850645500`). Triggering diagnosis in `TASKS/PLANNING/app-logging/brainstorm.md`.
 - 2026-10-01: user decisions — full cleanup in one go; pre-spawn failures fail fast; consolidate into one conventional filterable application log; QA deferred (not implementing immediately, no retry of the dead meeting — Zoom shows "Unable to transcribe", transcript is gone).
 - Relationship: complements `success-ledger-all-exits` (per-Pi ledger rows, unmerged branch); overlap to be discussed separately. Failure-enum expansion split out to `BACKLOG.md`.

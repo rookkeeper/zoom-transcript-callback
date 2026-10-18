@@ -7,15 +7,13 @@ Start here before doing anything in this repo:
 
 ## Software practices
 
-- This repo's software practices are managed by the `software-factory` skill — planning, task tracking, delegation, worktrees, and integration.
-- That skill lives at `.agents/skills/software-factory` as a symlink to its canonical location in the agent-skills repo, and it is gitignored. Keep it symlinked and gitignored; never vendor a copy into this repo.
+- The `software-factory` skill owns workflow guidance — planning, task tracking, delegation, worktrees, and integration — alongside this project's substantive constraints.
+- That skill lives at `.agents/skills/software-factory` as a symlink into the project-specific template worktree in the agent-skills repo, and it is gitignored. Keep it symlinked and gitignored; never vendor a copy into this repo.
 - Commit any change to the software-factory skill in the repo where the skill actually lives, not here.
 
 ## Spoken progress reports
 
-- Report progress out loud with `say` whenever a research or implementation task takes more than a few tool calls or more than one thinking step.
-- Use exactly this form: `say "zoom-transcript-callback: <status update>"`, where the status update is a single sentence of 5-9 words.
-- Send one short sentence per update; do not narrate every step.
+On macOS, only the orchestrator uses `say`, never workers. After roughly ten internal tool/thinking turns since the latest user message, speak a short status phrase; space further updates similarly, resetting the interval on a new user message. Also announce completed workers and blockers the orchestrator cannot resolve. Use `say "zoom-transcript-callback: <brief status>"`; do not read reports aloud or narrate every step.
 
 ## What lives here
 
@@ -27,7 +25,7 @@ For now this repo is mostly one thing: a local Zoom webhook adapter.
 - `ui/` — local history screen served on the events port (`/events`).
 - `ARCHITECTURE/` — `README.md` index plus `server.md`, `database.md`, `ui.md`.
 - `PRODUCT/` — `README.md` index plus `overview.md` (product intent).
-- `TASKS/` — the task system: `KANBAN/` official cards, `WIP/` active planning (`brainstorm.md`, `todos.md`), `COMPLETE/` finished artifacts and outcomes.
+- `TASKS/` — see [task guidance](TASKS/README.md): `KANBAN/` official cards, undated `PLANNING/<task>/`, dispatch-dated `WIP/YYYY-MM-DD-<task>/`, and `COMPLETE/YYYY-MM-DD-<task>/` artifacts/outcomes.
 - `README.md` — full setup (Zoom app, Pi, Cloudflare Tunnel, LaunchAgent, testing).
 - `.env.example` — audited list of required env vars; `.env` holds secrets (gitignored, never commit).
 - `data/` and `logs/` — runtime state (sqlite, oauth json, jsonl logs); gitignored, never commit.
@@ -45,7 +43,7 @@ For now this repo is mostly one thing: a local Zoom webhook adapter.
 ## Delegation and worktrees
 
 - Default to at most three concurrent work items. Nested subworkers are not permitted unless the user agrees otherwise.
-- The orchestrator provisions `.worktrees/<task-name>` on branch `<task-name>` from clean, committed `main` and launches the worker there. Workers never create their own worktree.
+- By default, the orchestrator provisions `.worktrees/<task-name>` on branch `<task-name>` from clean, committed `main` and launches the worker there. Workers never create their own worktree. Explicit user-directed workflow choices follow the skill's override, preserving unrelated changes, safety/privacy constraints, and no overlapping shared-checkout writers.
 - Harness: Pi with the `pi-subagents` skill. **Unvalidated:** launching a worker into an already-created worktree with auto-allocation disabled has not been tested here. Validate with a harmless dummy job before the first real dispatch, and do not claim background/steer/resume support until it is proven.
 
 ## Commands
@@ -65,13 +63,13 @@ For now this repo is mostly one thing: a local Zoom webhook adapter.
 
 ## QA — required
 
-Passing tests alone is not product QA. Depending on the change, operate the real system:
+Product verification is mandatory; passing tests alone is not product QA. A user-attended walkthrough is optional (ask for large tasks); when requested, record an explicit approval gate before integration. Plan isolated data/ports and representative journeys before implementation. Depending on the change, operate the real system:
 
 - **Callback path:** start the server, then `./scripts/send-fake-request.sh` (signed) and confirm the activity appears at `http://127.0.0.1:8788/events` with the expected status.
 - **Zoom path:** `node --env-file=.env scripts/process-meeting.mjs <meetingId>` against a real meeting, then confirm the event note and participant links in the Peeps vault, and confirm the media branch's local files and cloud deletions.
 - **UI path:** `npm run test:browser`, plus a manual look at `/events` for layout, filters, and detail navigation.
 
-Do not claim a live Zoom/Pi run unless one actually ran. If independent QA is not possible for a task, mark it blocked and report what is missing.
+Do not claim a live Zoom/Pi run unless one actually ran. If independent QA is not possible for a task, mark it blocked and report what is missing. The commands above are operational entry points, not automatically safe QA isolation: `scripts/run-server.sh` overwrites environment overrides from `.env` and kills existing port listeners; Zoom processing can write to Peeps and delete cloud assets. Do not use production assets for a walkthrough. Isolated start/seed/inspect/stop affordances remain a gap; scripts are unchanged.
 
 ## What to do next
 
