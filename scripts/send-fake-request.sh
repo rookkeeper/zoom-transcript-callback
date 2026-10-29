@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 mode=${1:-validation}
-port=${SERVER_PORT:-8788}
+port=${CALLBACK_PORT:-8787}
 secret=
 transcript_topic=${TRANSCRIPT_TOPIC:-Fake transcript test}
 
@@ -14,7 +14,7 @@ if [ -f .env ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       ZOOM_WEBHOOK_SECRET=*) secret=${line#*=} ;;
-      SERVER_PORT=*) port=${line#*=} ;;
+      CALLBACK_PORT=*) port=${line#*=} ;;
     esac
   done < .env
 fi

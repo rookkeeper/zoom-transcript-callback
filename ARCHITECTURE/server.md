@@ -8,7 +8,7 @@ Request flow: HTTP adapter → activity service → repository → SQLite. Pi ex
 |---|---|---|
 | `config.loadConfig()` | environment → config | Ports, paths, limits, Zoom secret, Pi settings and prompt |
 | `zoomPrompt.ZOOM_TRANSCRIPT_PROMPT` | template string | Internal Zoom transcript-processing instructions |
-| `application.createApplication(config, service, processor, {live})` | dependencies → `{server, close}` | One unbound HTTP server, public allowlist/private mini-app mounts |
+| `application.createApplication(config, service, processor, {live})` | dependencies → `{callback, admin, close}` | Two unbound listeners, public Zoom allowlist and local mini-app mounts |
 | `index.mjs` | config → running process | Opens storage, recovers interrupted work, listens, drains jobs on ordinary shutdown |
 
 ## HTTP/API layer
@@ -19,7 +19,7 @@ Request flow: HTTP adapter → activity service → repository → SQLite. Pi ex
 | `api.activityApi(service, url)` | service + URL → `{status, body}` | GET `/api/events` and `/api/events/:id`; validates pagination/status |
 | `admin.adminHandler(service)` | service → HTTP handler | History mini-app; shared local-access guard. `adminServer` is a test-fixture wrapper only |
 
-One listener defaults to loopback **8788** (`SERVER_PORT`; legacy CALLBACK_PORT/EVENTS_PORT ignored). Public allowlist: POST /zoom/transcripts, GET /zoom/oauth, POST /zoom/rtms. Private history/live routes and assets require `routing/localAccess.mjs`: loopback peer, exact local Host, no forwarded/Cloudflare hints, matching Origin/site. Deny before dispatch; unknown routes 404. Peer alone is insufficient because the tunnel connects locally. `src/index.mjs` composes independent recording and live cores and shuts down live sockets/SSE while accepted recording jobs drain. List query: `endpoint`, `status`, `limit` (1–100), `offset` (nonnegative integer). List response: `{items, limit, offset}`. Detail returns one activity. Invalid queries return 400; missing IDs return 404; storage failures return a generic 500 from the history API.
+One process retains the original two listeners: **8787** (`CALLBACK_PORT`) for Cloudflare/Zoom, **8788** (`EVENTS_PORT`) bound loopback-only for both UIs/APIs. `SERVER_PORT` is ignored. Public allowlist: POST /zoom/transcripts, GET /zoom/oauth, POST /zoom/rtms. Private history/live routes and assets require `routing/localAccess.mjs`: loopback peer, exact local Host, no forwarded/Cloudflare hints, matching Origin/site. Deny before private dispatch; public listener never mounts private paths (404). Unknown routes404. Peer alone is insufficient because the tunnel connects locally. `src/index.mjs` composes independent recording and live cores and shuts down live sockets/SSE while accepted recording jobs drain. List query: `endpoint`, `status`, `limit` (1–100), `offset` (nonnegative integer). List response: `{items, limit, offset}`. Detail returns one activity. Invalid queries return 400; missing IDs return 404; storage failures return a generic 500 from the history API.
 
 ## Service layer: `activities.ActivityService(repository)`
 

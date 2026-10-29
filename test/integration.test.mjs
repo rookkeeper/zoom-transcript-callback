@@ -18,10 +18,13 @@ test('signed callback is acknowledged before completion, queried locally, and pr
   state.append({user_id:1,user_name:'Synthetic speaker',timestamp:1,data:'Synthetic shared-server fixture'});
   const live=createLiveHandlers({webhookSecret:'test',state,controller:{handle(){},async close(){}}});
   const app=createApplication(config,service,()=>new Promise(resolve=>{complete=resolve;}),{live});
-  assert.ok(app.server,'Application must compose one shared listener');
-  app.server.listen(0,'127.0.0.1');await once(app.server,'listening');t.after(()=>app.close());
-  const publicUrl=`http://127.0.0.1:${app.server.address().port}`,localUrl=publicUrl;
+  t.after(()=>app.close());
+  assert.ok(app.callback && app.admin,'One process must compose separate public/private listeners');
+  for (const server of [app.callback,app.admin]) { server.listen(0,'127.0.0.1'); await once(server,'listening'); }
+  const publicUrl=`http://127.0.0.1:${app.callback.address().port}`,localUrl=`http://127.0.0.1:${app.admin.address().port}`;
+  assert.notEqual(publicUrl,localUrl);
   for(const path of ['/events','/api/events','/live','/live/app.mjs','/api/live/stream','/api/live/clear']){
+    assert.equal((await fetch(publicUrl+path)).status,404,`Public listener must never mount ${path}`);
     for(const headers of [{host:'public.example'},{'x-forwarded-host':'public.example'},{'cf-ray':'fake-ray'},{'cf-connecting-ip':'1.2.3.4'},{forwarded:'for=1.2.3.4'},{via:'proxy'},{origin:'https://evil.example'},{'sec-fetch-site':'cross-site'}]){
       const status=await new Promise((resolve,reject)=>http.get(localUrl+path,{headers},response=>{response.resume();resolve(response.statusCode);}).on('error',reject));
       assert.equal(status,403,`${path} ${JSON.stringify(headers)}`);
@@ -30,6 +33,8 @@ test('signed callback is acknowledged before completion, queried locally, and pr
   assert.equal((await fetch(localUrl+'/live')).status,200);
   assert.equal((await fetch(localUrl+'/events')).status,200);
   assert.equal((await fetch(localUrl+'/not-a-route')).status,404);
+  assert.equal((await fetch(localUrl+'/zoom/oauth')).status,404);
+  assert.equal((await fetch(localUrl+'/zoom/rtms',{method:'POST'})).status,404);
   const stream=await fetch(localUrl+'/api/live/stream');
   const reader=stream.body.getReader();
   assert.match(new TextDecoder().decode((await reader.read()).value),/Synthetic shared-server fixture/);

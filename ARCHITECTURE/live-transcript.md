@@ -1,12 +1,12 @@
 # Live transcript
 
-Independent framework-free Node package in `live/`; only dependency at runtime is `ws`. RTMS/state/UI cores have no imports from recording processing, existing UI, database, OAuth store or Pi. Shared composition starts both mini-apps and shares root Zoom credentials, one listener and the routing-level local-access guard. No disk transcript persistence or payload logging.
+Independent framework-free Node package in `live/`; only dependency at runtime is `ws`. RTMS/state/UI cores have no imports from recording processing, existing UI, database, OAuth store or Pi. Shared composition starts both mini-apps and shares root Zoom credentials and the routing-level local-access guard, retaining separate public/private listeners. No disk transcript persistence or payload logging.
 
 ## Boundaries
 
-- Shared listener (default 8788): public `POST /zoom/rtms` mounts `createLiveHandlers().webhookHandler`. Bounded raw body, timestamp/HMAC verification before parsing; signed validation challenge and RTMS lifecycle events. Meeting fields are at `payload`, not `payload.object`.
-- Private routes on the same 8788 listener: `GET /live`, static `/live/*`, `GET /api/live/stream`, same-origin `POST /api/live/clear`. Loopback peer, exact local Host/Origin and forwarding/site checks, no CORS, no-store/CSP. Public/tunneled requests receive 403.
-- Existing tunnel targets 8788; no RTMS-specific rule. The shared router exposes only the three public Zoom endpoints. `createLiveService` two-listener wrapper remains for isolated synthetic demos/tests only.
+- Public listener (default8787): `POST /zoom/rtms` mounts `createLiveHandlers().webhookHandler`. Bounded raw body, timestamp/HMAC verification before parsing; signed validation challenge and RTMS lifecycle events. Meeting fields are at `payload`, not `payload.object`.
+- Private routes on the loopback-only8788 listener: `GET /live`, static `/live/*`, `GET /api/live/stream`, same-origin `POST /api/live/clear`. Loopback peer, exact local Host/Origin and forwarding/site checks, no CORS, no-store/CSP. Public/tunneled requests receive 403.
+- Existing tunnel remains at8787; no RTMS-specific rule and no private routes on that listener. The shared router exposes only the three public Zoom endpoints. `createLiveService` two-listener wrapper remains for isolated synthetic demos/tests only.
 
 ## Protocol and state
 

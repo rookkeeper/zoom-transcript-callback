@@ -16,7 +16,8 @@ export function loadConfig() {
   const piSkillsRoot = process.env.PI_SKILLS_ROOT?.trim() || "/Users/johnberryman/projects/github/JnBrymn/agent-skills/skills";
   const config = {
     host: process.env.CALLBACK_HOST?.trim() || "127.0.0.1",
-    port: Number.parseInt(process.env.SERVER_PORT ?? "8788", 10),
+    port: Number.parseInt(process.env.CALLBACK_PORT ?? "8787", 10),
+    eventsPort: Number.parseInt(process.env.EVENTS_PORT ?? "8788", 10),
     eventsDatabasePath: process.env.EVENTS_DATABASE_PATH?.trim() || join(process.cwd(), 'data', 'events.sqlite'),
     zoomSecret: required("ZOOM_WEBHOOK_SECRET"),
     piCli: process.env.PI_CLI_PATH?.trim() || "pi",

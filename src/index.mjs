@@ -15,10 +15,11 @@ const state = new TranscriptState();
 const controller = new RtmsController({ clientId: config.zoomClientId, clientSecret: config.zoomClientSecret, state });
 const live = createLiveHandlers({ webhookSecret: config.zoomSecret, state, controller });
 const app = createApplication(config, activities, createMeetingJob(config), { live });
-app.server.on('error', error => {
+for (const server of [app.callback, app.admin]) server.on('error', error => {
   console.error(JSON.stringify({ event: 'listener_failed', code: error.code })); process.exit(1);
 });
-app.server.listen(config.port, config.host, () => console.log(`Zoom server :${config.port}; local http://127.0.0.1:${config.port}/events and /live`));
+app.callback.listen(config.port, config.host, () => console.log(`Zoom callbacks :${config.port}`));
+app.admin.listen(config.eventsPort, '127.0.0.1', () => console.log(`Local http://127.0.0.1:${config.eventsPort}/events and /live`));
 
 let stopping = false;
 function shutdown() {

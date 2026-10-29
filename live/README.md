@@ -4,17 +4,17 @@ Open **http://127.0.0.1:8788/live** while hosting a meeting. Speaker names and t
 
 ## Server and privacy
 
-Recording/history and live transcription have separate cores but share **one process and port 8788**. `src/application.mjs` is the thin router; `routing/localAccess.mjs` is the common private-access guard. No shared transcript database, Pi processing or recording deletion is introduced by RTMS.
+Recording/history and live transcription have separate cores but share **one process**, retaining the original **public8787 / local8788** listeners. `src/application.mjs` is the thin router; `routing/localAccess.mjs` is the common private-access guard. No shared transcript database, Pi processing or recording deletion is introduced by RTMS.
 
 | Route | Access |
 | --- | --- |
-| `POST /zoom/transcripts` | Public, signed recording webhook |
-| `GET /zoom/oauth` | Public OAuth callback |
-| `POST /zoom/rtms` | Public, signed RTMS webhook/validation |
-| `/events`, `/api/events/*`, history assets | Local only |
-| `/live`, `/live/*`, `GET /api/live/stream`, `POST /api/live/clear` | Local only |
+| `POST /zoom/transcripts` | Public8787, signed recording webhook |
+| `GET /zoom/oauth` | Public8787, OAuth callback |
+| `POST /zoom/rtms` | Public8787, signed RTMS webhook/validation |
+| `/events`, `/api/events/*`, history assets | Local8788 only |
+| `/live`, `/live/*`, `GET /api/live/stream`, `POST /api/live/clear` | Local8788 only |
 
-Private requests require a loopback peer **and** exact `127.0.0.1:<port>`/`localhost:<port>` Host, no forwarding/Cloudflare headers, and matching Origin/site. Checking peer alone is unsafe because Cloudflare also connects locally. Untrusted requests are denied before handlers run. Clear additionally requires a same-origin JSON POST. Unknown routes return 404. No CORS; text is rendered literally, not HTML. Other local processes/users can access these pages; this is not authenticated remote sharing.
+The public listener never mounts private paths (404). The private listener binds loopback only; requests additionally require a loopback peer **and** exact `127.0.0.1:<port>`/`localhost:<port>` Host, no forwarding/Cloudflare headers, and matching Origin/site. Checking peer alone is unsafe because Cloudflare also connects locally. Untrusted requests are denied before handlers run. Clear additionally requires a same-origin JSON POST. Unknown routes return 404. No CORS; text is rendered literally, not HTML. Other local processes/users can access these pages; this is not authenticated remote sharing.
 
 ## Start/stop
 
@@ -27,7 +27,7 @@ npm ci
 node --env-file=.env src/index.mjs
 ```
 
-`SERVER_PORT` defaults to **8788**; `CALLBACK_HOST` defaults to `127.0.0.1`. `CALLBACK_PORT`/`EVENTS_PORT` are retired and ignored. Normal startup ignores all `LIVE_*` port settings (they are demo/test-only). The existing root `.env` supplies the same Development Zoom app's `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` and `ZOOM_WEBHOOK_SECRET`. Never paste them into browser code or logs. `npm --prefix live start` is a compatibility entry point to the shared server, not a second service.
+`CALLBACK_PORT` defaults to **8787**, `EVENTS_PORT` to **8788**; `CALLBACK_HOST` defaults to `127.0.0.1`, and the private listener always binds loopback. `SERVER_PORT` from the abandoned single-port experiment is ignored. Normal startup ignores all `LIVE_*` port settings (they are demo/test-only). The existing root `.env` supplies the same Development Zoom app's `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` and `ZOOM_WEBHOOK_SECRET`. Never paste them into browser code or logs. `npm --prefix live start` is a compatibility entry point to the shared server, not a second service.
 
 On this Mac the existing **`com.rookkeeper.zoom-transcript-callback`** LaunchAgent owns both mini-apps. The old independent `com.rookkeeper.zoom-live-transcript` agent must be unloaded/removed; do not run two receivers. Shared restart affects both apps and clears in-memory live text. Wait for active recording jobs before restarting; `run-server.sh` stops existing listeners on the configured port.
 
@@ -56,7 +56,7 @@ Use the existing **user-managed General app, Development environment** throughou
 
 ## Cloudflare
 
-Reuse the existing `dev-callbacks.arcturus-labs.com` hostname/tunnel. Intended final origin: **`http://127.0.0.1:8788`**; no RTMS-specific rule or new hostname is needed. However, deployment probes and the connector log on 2026-10-29 proved its current origin is **`http://localhost:8787`**, despite the earlier assumption. Cloudflare was not changed. A temporary **public-Zoom-path-only** compatibility process on8787 forwards to the shared app on8788; both public webhook validation probes now pass and public private-page requests are denied. To have exactly one listening port, update the existing origin to8788 and then stop that temporary process; details in `TASKS/WIP/2026-10-29-single-port-routing/outcome.md`. Keep forwarding metadata intact; the code also rejects public access to private routes on8788. The retired standalone8789/8790 service is removed.
+**Do not change Cloudflare.** The existing `dev-callbacks.arcturus-labs.com` hostname/tunnel already targets **`http://localhost:8787`**. The new `/zoom/rtms` route is mounted there alongside recording/OAuth. No extra path rule, hostname, origin change or forwarding process is required. Never publish8788: it contains local history/live pages and APIs. Code guards also reject public Host/proxy/Origin requests if a private request is forwarded accidentally. The temporary compatibility bridge and old standalone8789/8790 live service are retired.
 
 ## Recovery and limits
 
@@ -71,11 +71,11 @@ npm ci --prefix live
 LIVE_WEBHOOK_PORT=18789 LIVE_UI_PORT=18790 node live/scripts/demo.mjs
 # Open http://127.0.0.1:18790/live ; Ctrl-C stops only this demo.
 npm test
-npm run test:browser                   # Both mini-apps on one isolated listener
+npm run test:browser                   # Both private mini-apps on18788, callbacks18787
 npm --prefix live test
 npm --prefix live run test:browser
 ```
 
-Demo uses fake credentials, an ephemeral fake Zoom WS server and synthetic text; no `.env`, Zoom, Pi or vault access. Its separate test listeners are not the production deployment. Observe matching speaker/text colors, literal markup inert, selection stable while updates arrive, scroll pause/resume, copy, refresh snapshot, clear and disconnect. Shared-server tests verify public callback routing and private rejection for spoofed Host, forwarding, Origin/site and non-loopback peers.
+Demo uses fake credentials, an ephemeral fake Zoom WS server and synthetic text; no `.env`, Zoom, Pi or vault access. Its separate test listeners are not the production deployment. Observe matching speaker/text colors, literal markup inert, selection stable while updates arrive, scroll pause/resume, copy, refresh snapshot, clear and disconnect. Application tests verify separate public/private listener routing and private rejection for spoofed Host, forwarding, Origin/site and non-loopback peers.
 
 Sources: [WS quickstart](https://developers.zoom.us/docs/rtms/meetings/quickstart-websockets/), [protocol](https://developers.zoom.us/docs/rtms/event-reference/universal-events/), [recovery](https://developers.zoom.us/docs/rtms/meetings/failover-reconnection/), [scopes](https://developers.zoom.us/docs/rtms/meetings/add-features/), [auto-start](https://developers.zoom.us/docs/rtms/meetings/quickstart/).

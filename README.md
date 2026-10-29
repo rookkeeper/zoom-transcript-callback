@@ -59,7 +59,7 @@ Start or restart the callback with:
 ./scripts/run-server.sh
 ```
 
-The script loads `.env` safely, installs npm dependencies, stops any process listening on `SERVER_PORT` (default **8788**), and starts the shared server. Wait for active jobs before restarting. One listener serves `/zoom/transcripts`, `/zoom/oauth`, `/zoom/rtms`, local `/events` and local `/live`. The private UI/APIs are guarded in code, not by a separate port. `CALLBACK_PORT` and `EVENTS_PORT` are retired and ignored; use `SERVER_PORT`.
+The script loads `.env` safely, installs npm dependencies, stops any process listening on `CALLBACK_PORT` (default **8787**), and starts one server process with two listeners. Wait for active jobs before restarting. Public8787 serves `/zoom/transcripts`, `/zoom/oauth`, `/zoom/rtms`; local8788 serves `/events`, `/live` and their APIs/assets. `EVENTS_PORT` changes the local port; `SERVER_PORT` from the abandoned single-port experiment is ignored.
 
 ### Start automatically on macOS
 
@@ -126,15 +126,15 @@ Requirements:
 - a Cloudflare account;
 - a domain managed by Cloudflare for a stable named hostname;
 - `cloudflared` installed on the Mac;
-- a named tunnel and published application route to `http://127.0.0.1:8788` (the intended single-port origin).
+- the existing named tunnel and published application route to `http://localhost:8787` (no change needed for RTMS).
 
 Create the tunnel in **Cloudflare Dashboard → Networking → Tunnels**, install the Mac connector, and add a route such as:
 
 ```text
-zoom-hook.example.com → http://127.0.0.1:8788
+zoom-hook.example.com → http://localhost:8787
 ```
 
-Migration status (2026-10-29): live probes and the connector log showed the existing origin is actually `http://localhost:8787`. Cloudflare was **not** changed. Temporary public-only forwarding on 8787 keeps callbacks working against the shared application on 8788; private paths are not forwarded. To eliminate that temporary listener, change the existing origin to 8788, verify callbacks, then stop the compatibility process. See `TASKS/WIP/2026-10-29-single-port-routing/outcome.md` for verified deployment details.
+The original two-port layout is retained: one process owns public8787 and private8788. Add the RTMS webhook at `https://dev-callbacks.arcturus-labs.com/zoom/rtms`; the existing Cloudflare route already delivers it to8787. No extra tunnel rule, origin change or compatibility forwarding is needed.
 
 Configure Zoom's Event Notification Endpoint URL as:
 
@@ -142,13 +142,13 @@ Configure Zoom's Event Notification Endpoint URL as:
 https://zoom-hook.example.com/zoom/transcripts
 ```
 
-The same server handles public callbacks and private pages. Its public allowlist is only `POST /zoom/transcripts`, `GET /zoom/oauth`, and `POST /zoom/rtms`; every history/live UI/API route requires a loopback peer, exact local Host, no proxy/Cloudflare forwarding headers, and matching Origin/site. Public requests to those routes receive 403. Keep Cloudflare's ordinary forwarding metadata intact; do not configure a proxy to impersonate a local browser. Unknown routes return 404. Do not put interactive Cloudflare Access authentication in front of this endpoint; Zoom cannot complete an interactive login. The callback's HMAC verification is the application-level authentication.
+The public listener exposes only `POST /zoom/transcripts`, `GET /zoom/oauth`, and `POST /zoom/rtms`; private paths return404 there. The separate history/live listener binds loopback only. Every private UI/API request additionally requires a loopback peer, exact local Host, no proxy/Cloudflare forwarding headers, and matching Origin/site; violations receive403. Never expose8788 through the tunnel. Keep Cloudflare's ordinary forwarding metadata intact; do not configure a proxy to impersonate a local browser. Unknown routes return 404. Do not put interactive Cloudflare Access authentication in front of this endpoint; Zoom cannot complete an interactive login. The callback's HMAC verification is the application-level authentication.
 
 Tailscale is useful for private Mac administration. A normal Tailscale address is not a public Zoom endpoint; Tailscale Funnel is an alternative public-ingress design but is not required here.
 
 ## Testing
 
-The local history screen is **http://127.0.0.1:8788/events** and live viewer **http://127.0.0.1:8788/live**. History API: `GET /api/events` (optional `endpoint`, `status`, `limit`, `offset`) and `GET /api/events/:id`. Live API: `GET /api/live/stream` (SSE) and same-origin `POST /api/live/clear`. `SERVER_PORT` changes the single shared listener. All private routes and their static assets reject nonlocal peers/Host, forwarding headers and hostile Origin/site; public callback requests cannot read history or transcript text.
+The local history screen is **http://127.0.0.1:8788/events** and live viewer **http://127.0.0.1:8788/live**. History API: `GET /api/events` (optional `endpoint`, `status`, `limit`, `offset`) and `GET /api/events/:id`. Live API: `GET /api/live/stream` (SSE) and same-origin `POST /api/live/clear`. `EVENTS_PORT` changes this local-only listener; `CALLBACK_PORT` controls the separate public listener. All private routes and their static assets reject nonlocal peers/Host, forwarding headers and hostile Origin/site; public callback requests cannot read history or transcript text.
 
 Activities persist in `data/events.sqlite`, configurable with `EVENTS_DATABASE_PATH`. Schema version 1 initializes automatically; a newer unsupported version stops startup. Stop the server before copying the database for backup, or use SQLite's online backup facility. Keep the database and any WAL files together during recovery. There is no historical JSONL import: the new history begins when this version starts.
 
@@ -166,7 +166,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Tests use temporary databases, fake Pi processes, and synthetic browser fixtures. They do not call a model or update Peeps. Browser tests bind port 18788; HTTP integration tests use temporary loopback ports.
+Tests use temporary databases, fake Pi processes, and synthetic browser fixtures. They do not call a model or update Peeps. Browser fixtures bind public18787/local18788; HTTP integration tests use temporary loopback ports.
 
 With the server running in another terminal, send signed local test requests:
 
@@ -188,6 +188,6 @@ Before configuring Zoom, test the full local path with a signed fixture and a fa
 - The webhook payload is untrusted meeting data. The callback uses a fixed Pi executable, skill list, model setting, and prompt file; payload values cannot configure code execution.
 - Each accepted callback starts a new Pi session in an isolated private working directory.
 
-## Standalone live transcript viewer
+## Live transcript viewer
 
-[`live/`](./live/README.md) is the memory-only Zoom RTMS mini-app for hosted meetings. Its core stays separate from recording/Pi; both are mounted by a thin shared router on **8788**. Public webhook: `POST /zoom/rtms`; local viewer: **http://127.0.0.1:8788/live**. Code-enforced local guards protect both UIs/APIs. Cloudflare is unchanged; temporary public-only forwarding accommodates its verified legacy 8787 origin until migration. See the feature README for Development scopes/events, reauthorization, auto-start, limits, demo/tests and shared start/stop. A real private Zoom test remains necessary.
+[`live/`](./live/README.md) is the memory-only Zoom RTMS mini-app for hosted meetings. Its core stays separate from recording/Pi; one process mounts both mini-apps using the original public8787/private8788 listeners. Public webhook: `POST /zoom/rtms`; local viewer: **http://127.0.0.1:8788/live**. Code-enforced local guards protect both UIs/APIs. Cloudflare remains unchanged at8787; no temporary forwarding or extra live service is needed. See the feature README for Development scopes/events, reauthorization, auto-start, limits, demo/tests and shared start/stop. A real private Zoom test remains necessary.
