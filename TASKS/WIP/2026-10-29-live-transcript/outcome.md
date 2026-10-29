@@ -1,6 +1,6 @@
 # Live transcript: software delivered, activation blocked
 
-> Historical standalone deployment below was superseded by [shared-server routing](../2026-10-29-single-port-routing/outcome.md). Current viewer is http://127.0.0.1:8788/live ; old standalone agent removed. Public RTMS validation now succeeds through temporary legacy-origin forwarding. Use live/README.md for current operation.
+> Historical standalone deployment below was superseded by [completed two-port composition](../../COMPLETE/2026-10-29-single-port-routing/outcome.md). Current viewer is http://127.0.0.1:8788/live ; old standalone agent and temporary forwarding removed. Public RTMS validation succeeds directly through unchanged Cloudflare→8787, while private routes stay on8788. Use live/README.md for current operation. Actual live Zoom verification remains pending.
 
 ## Delivered (2026-10-29)
 

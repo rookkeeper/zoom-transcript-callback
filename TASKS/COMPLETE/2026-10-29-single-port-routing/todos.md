@@ -18,5 +18,5 @@ The checklist below records the earlier single-port attempt. Final user decision
 - [x] Preserve live/history private guard and update current setup/architecture/docs.
 - [x] Run60 root tests,3 root browser tests,19 live tests,3 live browser tests; all pass.
 - [x] Independent isolated browser/HTTP QA: both private UIs200, public private paths404, forwarded private requests403, signed public CRC200.
-- [ ] Remove verified temporary forwarding, restart owned service with no active jobs, verify real local/public endpoints and same PID on both listeners.
-- [ ] Record final outcome, archive completed routing task, commit and announce tersely.
+- [x] Remove verified temporary forwarding, restart owned service with no active jobs, verify real local/public endpoints and same PID on both listeners. ~ PID44941 owns8787/8788; local private200, forwarded403, public private404, real signed CRCs200. Cloudflare untouched.
+- [x] Record final outcome and archive completed routing task. ~ Outcome records final deployment and separate unverified real-Zoom gate; completion announcement only after cleanup/commit.
