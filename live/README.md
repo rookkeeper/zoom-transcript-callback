@@ -56,7 +56,7 @@ Use the existing **user-managed General app, Development environment** throughou
 
 ## Cloudflare
 
-Reuse the **existing** `dev-callbacks.arcturus-labs.com` hostname/tunnel targeting **`http://127.0.0.1:8788`**, as confirmed by John. No new hostname, port or RTMS-specific tunnel rule is needed. Requests reach the shared router; code blocks private pages/APIs. Keep Cloudflare forwarding headers intact; do not rewrite public requests to pretend to be local. Repository references to production 8787/8789/8790 are obsolete (historical task records are preserved).
+Reuse the existing `dev-callbacks.arcturus-labs.com` hostname/tunnel. Intended final origin: **`http://127.0.0.1:8788`**; no RTMS-specific rule or new hostname is needed. However, deployment probes and the connector log on 2026-10-29 proved its current origin is **`http://localhost:8787`**, despite the earlier assumption. Cloudflare was not changed. A temporary **public-Zoom-path-only** compatibility process on8787 forwards to the shared app on8788; both public webhook validation probes now pass and public private-page requests are denied. To have exactly one listening port, update the existing origin to8788 and then stop that temporary process; details in `TASKS/WIP/2026-10-29-single-port-routing/outcome.md`. Keep forwarding metadata intact; the code also rejects public access to private routes on8788. The retired standalone8789/8790 service is removed.
 
 ## Recovery and limits
 

@@ -1,5 +1,7 @@
 # Live transcript: software delivered, activation blocked
 
+> Historical standalone deployment below was superseded by [shared-server routing](../2026-10-29-single-port-routing/outcome.md). Current viewer is http://127.0.0.1:8788/live ; old standalone agent removed. Public RTMS validation now succeeds through temporary legacy-origin forwarding. Use live/README.md for current operation.
+
 ## Delivered (2026-10-29)
 
 Integrated isolated `live/` service into local main; no remote push. Existing recording/Pi/Peeps source, UI, scripts, root package and runtime state untouched. Shared root `.env` not modified. Setup/operation reference: [live/README.md](../../../live/README.md).

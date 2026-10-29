@@ -126,13 +126,15 @@ Requirements:
 - a Cloudflare account;
 - a domain managed by Cloudflare for a stable named hostname;
 - `cloudflared` installed on the Mac;
-- a named tunnel and published application route to `http://127.0.0.1:8788` (the existing route, confirmed by John).
+- a named tunnel and published application route to `http://127.0.0.1:8788` (the intended single-port origin).
 
 Create the tunnel in **Cloudflare Dashboard → Networking → Tunnels**, install the Mac connector, and add a route such as:
 
 ```text
 zoom-hook.example.com → http://127.0.0.1:8788
 ```
+
+Migration status (2026-10-29): live probes and the connector log showed the existing origin is actually `http://localhost:8787`. Cloudflare was **not** changed. Temporary public-only forwarding on 8787 keeps callbacks working against the shared application on 8788; private paths are not forwarded. To eliminate that temporary listener, change the existing origin to 8788, verify callbacks, then stop the compatibility process. See `TASKS/WIP/2026-10-29-single-port-routing/outcome.md` for verified deployment details.
 
 Configure Zoom's Event Notification Endpoint URL as:
 
@@ -188,4 +190,4 @@ Before configuring Zoom, test the full local path with a signed fixture and a fa
 
 ## Standalone live transcript viewer
 
-[`live/`](./live/README.md) is the memory-only Zoom RTMS mini-app for hosted meetings. Its core stays separate from recording/Pi; both are mounted by a thin shared router on **8788**. Public webhook: `POST /zoom/rtms`; local viewer: **http://127.0.0.1:8788/live**. Code-enforced local guards protect both UIs/APIs. Existing Cloudflare ingress is unchanged. See the feature README for Development scopes/events, reauthorization, auto-start, limits, demo/tests and shared start/stop. A real private Zoom test remains necessary.
+[`live/`](./live/README.md) is the memory-only Zoom RTMS mini-app for hosted meetings. Its core stays separate from recording/Pi; both are mounted by a thin shared router on **8788**. Public webhook: `POST /zoom/rtms`; local viewer: **http://127.0.0.1:8788/live**. Code-enforced local guards protect both UIs/APIs. Cloudflare is unchanged; temporary public-only forwarding accommodates its verified legacy 8787 origin until migration. See the feature README for Development scopes/events, reauthorization, auto-start, limits, demo/tests and shared start/stop. A real private Zoom test remains necessary.
