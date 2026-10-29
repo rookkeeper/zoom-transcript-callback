@@ -39,6 +39,24 @@ test('literal selectable colored text, refresh snapshot, pause/selection, copy a
   expect(errors).toEqual([]);
 });
 
+test('a restored page reopens its live connection after pagehide', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Original = window.EventSource;
+    window.liveSources = [];
+    window.EventSource = class extends Original {
+      constructor(...args) { super(...args); window.liveSources.push(this); }
+    };
+  });
+  await page.goto('/live');
+  await expect(page.locator('#status')).toHaveText('Live');
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  expect(await page.evaluate(() => window.liveSources[0].readyState)).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect.poll(() => page.evaluate(() => window.liveSources.length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.liveSources[1].readyState)).toBe(1);
+  await expect(page.locator('#status')).toHaveText('Live');
+});
+
 test('a new process snapshot cannot retain old rows with reused numeric IDs', async ({ page }) => {
   const row = text => ({ id: 1, speaker: 'fake', name: 'Fake speaker', text, timestamp: 1 });
   await page.route('**/api/live/stream', route => route.fulfill({ contentType: 'text/event-stream', body:

@@ -40,24 +40,29 @@ function renderRows() {
   $('empty').hidden = rows.length > 0;
   scroll();
 }
-const source = new EventSource('/api/live/stream');
-source.onmessage = event => {
-  let message; try { message = JSON.parse(event.data); } catch { return; }
-  connected = true;
-  if (message.type === 'snapshot') {
-    if (epoch !== message.epoch) {
-      for (const node of nodes.values()) node.remove();
-      nodes.clear(); epoch = message.epoch;
-    }
-    rows = message.rows; status = message.status; detail = message.detail; dropped = message.dropped;
-    renderRows();
-  } else if (message.type === 'append') {
-    rows.push(message.row); rows = rows.filter(row => row.id >= message.firstId); dropped = message.dropped;
-    renderRows();
-  } else if (message.type === 'status') { status = message.status; detail = message.detail; }
-  renderStatus();
-};
-source.onerror = () => { connected = false; renderStatus(); };
+let source;
+function connect() {
+  source = new EventSource('/api/live/stream');
+  source.onmessage = event => {
+    let message; try { message = JSON.parse(event.data); } catch { return; }
+    connected = true;
+    if (message.type === 'snapshot') {
+      if (epoch !== message.epoch) {
+        for (const node of nodes.values()) node.remove();
+        nodes.clear(); epoch = message.epoch;
+      }
+      rows = message.rows; status = message.status; detail = message.detail; dropped = message.dropped;
+      renderRows();
+    } else if (message.type === 'append') {
+      rows.push(message.row); rows = rows.filter(row => row.id >= message.firstId); dropped = message.dropped;
+      renderRows();
+    } else if (message.type === 'status') { status = message.status; detail = message.detail; }
+    renderStatus();
+  };
+  source.onerror = () => { connected = false; renderStatus(); };
+}
+connect();
+window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 $('follow').onclick = () => { following = !following; if (following) {
   window.getSelection()?.removeAllRanges(); scroll();
 } renderStatus(); };
@@ -80,4 +85,4 @@ $('clear').onclick = async () => {
     $('notice').textContent = 'Transcript cleared for all viewers.';
   } catch { $('notice').textContent = 'Could not clear. Check the local service connection.'; }
 };
-window.addEventListener('pagehide', () => source.close());
+window.addEventListener('pagehide', () => { source.close(); connected = false; renderStatus(); });

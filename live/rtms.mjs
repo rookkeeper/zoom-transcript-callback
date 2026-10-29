@@ -41,6 +41,7 @@ export class RtmsController {
       if (this.stopped.has(key)) return;
       this.latest = event.event_ts;
       const reconnect = this.session?.key === key;
+      if (!reconnect) { this.streamPaused = false; this.sessionPaused = false; }
       this.dispose();
       this.session = { key, meeting: p.meeting_uuid, stream: p.rtms_stream_id, url };
       this.gap = reconnect || this.state.meeting === p.meeting_uuid;
@@ -106,7 +107,7 @@ export class RtmsController {
       try { this.mediaUrl = this.validateUrl(msg.media_server?.server_urls?.transcript ?? msg.media_server?.server_urls?.all); }
       catch { this.end('disconnected', 'Zoom supplied an unsupported media address. Stop and restart RTMS.'); return; }
       ws.ready = true;
-      this.send(ws, { msg_type: 5, events: [{ event_type: 7, subscribe: true }] });
+      // Interruption event 7 is delivered automatically; Zoom forbids subscribing to it.
       this.connectMedia();
     } else if (ws.ready && msg.msg_type === 6 && (msg.event?.event_type === 7 || msg.event_type === 7)) {
       this.retry('media');
@@ -116,12 +117,20 @@ export class RtmsController {
         if ((msg.reason ?? msg.stop_reason) === 8) this.state.clear();
         this.end('ended', 'Zoom ended this stream. To reconnect, stop and restart RTMS in Zoom.');
       }
-      else if (msg.state === 5) this.state.setStatus('paused', 'RTMS paused in Zoom.');
-      else if (msg.state === 1 || msg.state === 6) { if (this.media?.ready) this.liveStatus(); }
+      else if (msg.state === 5) { this.streamPaused = true; this.state.setStatus('paused', 'RTMS paused in Zoom.'); }
+      else if (msg.state === 1 || msg.state === 6) {
+        this.streamPaused = false;
+        if (this.media?.ready) this.liveStatus();
+      }
     } else if (ws.ready && msg.msg_type === 9) {
       if (msg.state === 5 && (msg.reason ?? msg.stop_reason) === 8) this.state.clear();
-      if (msg.state === 3 || msg.state === 5) this.state.setStatus('paused', 'Zoom session paused or stopped; waiting for it to resume.');
-      else if ((msg.state === 2 || msg.state === 4) && this.media?.ready) this.liveStatus();
+      if (msg.state === 3 || msg.state === 5) {
+        this.sessionPaused = true;
+        this.state.setStatus('paused', 'Zoom session paused or stopped; waiting for it to resume.');
+      } else if (msg.state === 2 || msg.state === 4) {
+        this.sessionPaused = false;
+        if (this.media?.ready) this.liveStatus();
+      }
     }
   }
   mediaMessage(ws, msg) {
@@ -141,6 +150,10 @@ export class RtmsController {
     ws?.terminate();
   }
   liveStatus() {
+    if (this.streamPaused || this.sessionPaused) {
+      this.state.setStatus('paused', 'RTMS paused or stopped in Zoom; waiting for explicit resume.');
+      return;
+    }
     this.state.setStatus('live', this.gap ? 'Reconnected. There may be missing text; historical gaps cannot be recovered.' : '');
   }
   retry(kind) {

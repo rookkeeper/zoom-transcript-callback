@@ -67,6 +67,28 @@ test('real WS transcript-only handshake, ACK on signaling, both keepalives, lite
   assert.equal(state.status, 'ended');
 });
 
+test('paused Zoom stream stays paused through media reconnect until explicit resume', async t => {
+  const fake = await fakeZoom(t), state = new TranscriptState();
+  const controller = new RtmsController({ clientId: 'fake', clientSecret: 'fake', state, validateUrl: acceptLocal, retryBaseMs: 10 });
+  t.after(() => controller.close());
+  controller.handle(started(Date.now(), 's', fake.url));
+  await waitFor(() => state.status === 'live');
+  assert.ok(!fake.received.some(e => e.msg.msg_type === 5 && e.msg.events?.some(event => event.event_type === 7)), 'Automatic event 7 must not be subscribed to');
+  for (const [msg_type, pauseState, resumeState] of [[8, 5, 6], [9, 3, 4], [9, 5, 2]]) {
+    const count = fake.sockets.media.length;
+    fake.sockets.signal[0].send(JSON.stringify({ msg_type, state: pauseState }));
+    await waitFor(() => state.status === 'paused');
+    fake.sockets.media.at(-1).terminate();
+    await waitFor(() => fake.sockets.media.length === count + 1 && controller.media?.ready);
+    assert.equal(state.status, 'paused');
+    fake.sockets.media.at(-1).send(JSON.stringify({ msg_type: 17, content: { user_id: 1, timestamp: count, data: 'Synthetic paused packet' } }));
+    await new Promise(resolve => setTimeout(resolve, 25));
+    assert.equal(state.rows.length, 0);
+    fake.sockets.signal[0].send(JSON.stringify({ msg_type, state: resumeState }));
+    await waitFor(() => state.status === 'live');
+  }
+});
+
 test('media-only retry, interrupted webhook without URLs, fresh failover and stale stop isolation', async t => {
   const fake = await fakeZoom(t), state = new TranscriptState();
   const controller = new RtmsController({ clientId: 'fake', clientSecret: 'fake', state, validateUrl: acceptLocal, retryBaseMs: 10 });
