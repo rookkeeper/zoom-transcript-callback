@@ -14,4 +14,7 @@ logs/
 data/
 test-results/
 playwright-report/
+
+# Local video-editing sources and artifacts.
+/SCRATCH/
 *.log
