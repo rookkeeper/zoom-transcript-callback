@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { verifyWebhook, hmac } from './security.mjs';
+import { localRequest } from '../routing/localAccess.mjs';
 
 const assets = new Map([
   ['/live', ['text/html; charset=utf-8', new URL('./ui/index.html', import.meta.url)]],
@@ -23,16 +24,10 @@ async function rawBody(req) {
   }
   return Buffer.concat(chunks);
 }
-export function privateRequest(req) {
-  const port = req.socket.localPort;
-  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return false;
-  if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host)) return false;
-  if (Object.keys(req.headers).some(key => ['forwarded', 'via', 'x-real-ip', 'cf-connecting-ip'].includes(key) || key.startsWith('x-forwarded-'))) return false;
-  if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return false;
-  return !req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(req.headers['sec-fetch-site']);
-}
+export const privateRequest = localRequest;
+export const liveUiPath = path => path === '/live' || path.startsWith('/live/') || path.startsWith('/api/live/');
 
-export function createLiveService({ webhookSecret, state, controller }) {
+export function createLiveHandlers({ webhookSecret, state, controller }) {
   const clients = new Set();
   const publish = update => {
     const frame = `data: ${JSON.stringify(update)}\n\n`;
@@ -42,7 +37,7 @@ export function createLiveService({ webhookSecret, state, controller }) {
     }
   };
   state.on('update', publish);
-  const webhook = http.createServer(async (req, res) => {
+  const webhookHandler = async (req, res) => {
     if (req.url !== '/zoom/rtms' || req.method !== 'POST') return reply(res, 404);
     try {
       const raw = await rawBody(req);
@@ -57,8 +52,8 @@ export function createLiveService({ webhookSecret, state, controller }) {
       controller.handle(event);
       reply(res, 200, '{"ok":true}');
     } catch (error) { if (!res.destroyed) reply(res, error.status === 413 ? 413 : 400, '{"error":"Invalid request"}'); }
-  });
-  const ui = http.createServer(async (req, res) => {
+  };
+  const uiHandler = async (req, res) => {
     if (!privateRequest(req)) return reply(res, 403);
     if (req.method === 'GET' && assets.has(req.url)) {
       const [type, path] = assets.get(req.url);
@@ -79,19 +74,32 @@ export function createLiveService({ webhookSecret, state, controller }) {
       return;
     }
     reply(res, 404);
-  });
+  };
   const heartbeat = setInterval(() => {
     for (const res of clients) if (!res.write(': keepalive\n\n')) { clients.delete(res); res.destroy(); }
   }, 15000);
   heartbeat.unref();
-  for (const server of [webhook, ui]) {
-    server.maxConnections = 64;
-    server.requestTimeout = 10000; server.headersTimeout = 10000; server.maxRequestsPerSocket = 100;
-    server.setTimeout(10000, socket => {
-      // SSE clients are intentionally long-lived; heartbeat writes keep them active.
-      if (![...clients].some(res => res.socket === socket)) socket.destroy();
-    });
-  }
+  return {
+    webhookHandler, uiHandler,
+    isStreamSocket: socket => [...clients].some(res => res.socket === socket),
+    async close() {
+      clearInterval(heartbeat); state.off('update', publish); await controller.close();
+      for (const res of clients) res.destroy(); clients.clear();
+    }
+  };
+}
+
+export function configureListener(server, live) {
+  server.maxConnections = 64;
+  server.requestTimeout = 10000; server.headersTimeout = 10000; server.maxRequestsPerSocket = 100;
+  server.setTimeout(10000, socket => { if (!live?.isStreamSocket(socket)) socket.destroy(); });
+}
+
+// Standalone listeners remain available for isolated demos/tests, not normal deployment.
+export function createLiveService(options) {
+  const live = createLiveHandlers(options);
+  const webhook = http.createServer(live.webhookHandler), ui = http.createServer(live.uiHandler);
+  for (const server of [webhook, ui]) configureListener(server, live);
   return {
     webhook, ui,
     async listen({ webhookHost = '127.0.0.1', webhookPort = 8789, uiPort = 8790 } = {}) {
@@ -102,8 +110,7 @@ export function createLiveService({ webhookSecret, state, controller }) {
       } catch (error) { await this.close(); throw error; }
     },
     async close() {
-      clearInterval(heartbeat); state.off('update', publish); await controller.close();
-      for (const res of clients) res.destroy(); clients.clear();
+      await live.close();
       await Promise.all([webhook, ui].map(server => new Promise(resolve => {
         server.close(resolve); server.closeAllConnections();
       })));

@@ -1,12 +1,12 @@
 # Live transcript
 
-Independent framework-free Node package in `live/`; only dependency at runtime is `ws`. No imports from `src/`, existing UI, database, OAuth store or Pi. Shares only root Zoom credentials/configuration loading. No disk transcript persistence or payload logging.
+Independent framework-free Node package in `live/`; only dependency at runtime is `ws`. RTMS/state/UI cores have no imports from recording processing, existing UI, database, OAuth store or Pi. Shared composition starts both mini-apps and shares root Zoom credentials, one listener and the routing-level local-access guard. No disk transcript persistence or payload logging.
 
 ## Boundaries
 
-- Public webhook listener (default 8789): only `POST /zoom/rtms`. Bounded raw body, timestamp/HMAC verification before parsing; signed validation challenge and RTMS lifecycle events. Meeting fields are at `payload`, not `payload.object`.
-- Private listener (always 127.0.0.1, default 8790): `GET /live`, static `/live/*`, `GET /api/live/stream`, same-origin `POST /api/live/clear`. Exact local Host/Origin and forwarding/site checks, no CORS, no-store/CSP. Never tunnel it.
-- Ingress routes the exact RTMS path before broad existing callback rules. Existing listeners remain separate.
+- Shared listener (default 8788): public `POST /zoom/rtms` mounts `createLiveHandlers().webhookHandler`. Bounded raw body, timestamp/HMAC verification before parsing; signed validation challenge and RTMS lifecycle events. Meeting fields are at `payload`, not `payload.object`.
+- Private routes on the same 8788 listener: `GET /live`, static `/live/*`, `GET /api/live/stream`, same-origin `POST /api/live/clear`. Loopback peer, exact local Host/Origin and forwarding/site checks, no CORS, no-store/CSP. Public/tunneled requests receive 403.
+- Existing tunnel targets 8788; no RTMS-specific rule. The shared router exposes only the three public Zoom endpoints. `createLiveService` two-listener wrapper remains for isolated synthetic demos/tests only.
 
 ## Protocol and state
 

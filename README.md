@@ -59,7 +59,7 @@ Start or restart the callback with:
 ./scripts/run-server.sh
 ```
 
-The script loads `.env` safely, installs the npm dependencies, stops any process listening on the configured callback port, and starts the server. It listens by default at `127.0.0.1:8787/zoom/transcripts`.
+The script loads `.env` safely, installs npm dependencies, stops any process listening on `SERVER_PORT` (default **8788**), and starts the shared server. Wait for active jobs before restarting. One listener serves `/zoom/transcripts`, `/zoom/oauth`, `/zoom/rtms`, local `/events` and local `/live`. The private UI/APIs are guarded in code, not by a separate port. `CALLBACK_PORT` and `EVENTS_PORT` are retired and ignored; use `SERVER_PORT`.
 
 ### Start automatically on macOS
 
@@ -126,12 +126,12 @@ Requirements:
 - a Cloudflare account;
 - a domain managed by Cloudflare for a stable named hostname;
 - `cloudflared` installed on the Mac;
-- a named tunnel and published application route to `http://127.0.0.1:8787`.
+- a named tunnel and published application route to `http://127.0.0.1:8788` (the existing route, confirmed by John).
 
 Create the tunnel in **Cloudflare Dashboard → Networking → Tunnels**, install the Mac connector, and add a route such as:
 
 ```text
-zoom-hook.example.com → http://127.0.0.1:8787
+zoom-hook.example.com → http://127.0.0.1:8788
 ```
 
 Configure Zoom's Event Notification Endpoint URL as:
@@ -140,13 +140,13 @@ Configure Zoom's Event Notification Endpoint URL as:
 https://zoom-hook.example.com/zoom/transcripts
 ```
 
-Publish only this callback service. Never route the Rook server's port through the tunnel. Do not put interactive Cloudflare Access authentication in front of this endpoint; Zoom cannot complete an interactive login. The callback's HMAC verification is the application-level authentication.
+The same server handles public callbacks and private pages. Its public allowlist is only `POST /zoom/transcripts`, `GET /zoom/oauth`, and `POST /zoom/rtms`; every history/live UI/API route requires a loopback peer, exact local Host, no proxy/Cloudflare forwarding headers, and matching Origin/site. Public requests to those routes receive 403. Keep Cloudflare's ordinary forwarding metadata intact; do not configure a proxy to impersonate a local browser. Unknown routes return 404. Do not put interactive Cloudflare Access authentication in front of this endpoint; Zoom cannot complete an interactive login. The callback's HMAC verification is the application-level authentication.
 
 Tailscale is useful for private Mac administration. A normal Tailscale address is not a public Zoom endpoint; Tailscale Funnel is an alternative public-ingress design but is not required here.
 
 ## Testing
 
-The local history screen is at **http://127.0.0.1:8788/events**. Its JSON API provides `GET /api/events` (optional `endpoint`, `status`, `limit`, `offset`) and `GET /api/events/:id`. `EVENTS_PORT` changes this separate local port; do not route it through Cloudflare. Forwarded requests and nonlocal Host headers are rejected. The public callback listener exposes no history routes.
+The local history screen is **http://127.0.0.1:8788/events** and live viewer **http://127.0.0.1:8788/live**. History API: `GET /api/events` (optional `endpoint`, `status`, `limit`, `offset`) and `GET /api/events/:id`. Live API: `GET /api/live/stream` (SSE) and same-origin `POST /api/live/clear`. `SERVER_PORT` changes the single shared listener. All private routes and their static assets reject nonlocal peers/Host, forwarding headers and hostile Origin/site; public callback requests cannot read history or transcript text.
 
 Activities persist in `data/events.sqlite`, configurable with `EVENTS_DATABASE_PATH`. Schema version 1 initializes automatically; a newer unsupported version stops startup. Stop the server before copying the database for backup, or use SQLite's online backup facility. Keep the database and any WAL files together during recovery. There is no historical JSONL import: the new history begins when this version starts.
 
@@ -188,4 +188,4 @@ Before configuring Zoom, test the full local path with a signed fixture and a fa
 
 ## Standalone live transcript viewer
 
-[`live/`](./live/README.md) is a separate, memory-only Zoom RTMS transcript utility for hosted meetings. It uses its own Node package, public `POST /zoom/rtms` listener (8789) and loopback-only `/live` viewer/SSE (8790); the existing recording/Pi pipeline is unchanged. It shares only the root Zoom app credentials. See its README for setup, scopes/credits, auto-start, exact tunnel-path precedence, isolated credential-free demo, tests and safe start/stop commands. Never tunnel the viewer. Live Zoom activation/verification is an external gate, not established by the synthetic demo.
+[`live/`](./live/README.md) is the memory-only Zoom RTMS mini-app for hosted meetings. Its core stays separate from recording/Pi; both are mounted by a thin shared router on **8788**. Public webhook: `POST /zoom/rtms`; local viewer: **http://127.0.0.1:8788/live**. Code-enforced local guards protect both UIs/APIs. Existing Cloudflare ingress is unchanged. See the feature README for Development scopes/events, reauthorization, auto-start, limits, demo/tests and shared start/stop. A real private Zoom test remains necessary.

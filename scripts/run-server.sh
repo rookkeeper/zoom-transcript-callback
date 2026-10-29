@@ -44,9 +44,9 @@ fi
 # Keep dependencies installed and current with package.json/package-lock.json.
 npm install --no-audit --no-fund
 
-port=${CALLBACK_PORT:-8787}
+port=${SERVER_PORT:-8788}
 case "$port" in
-  ''|*[!0-9]*) printf '%s\n' "CALLBACK_PORT must be a number" >&2; exit 1 ;;
+  ''|*[!0-9]*) printf '%s\n' "SERVER_PORT must be a number" >&2; exit 1 ;;
 esac
 
 # Replace an existing listener on the callback port.

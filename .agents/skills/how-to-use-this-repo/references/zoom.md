@@ -15,7 +15,8 @@ Use this reference for Zoom setup, recording operations, callbacks, transcript p
   ```
 - **Public callback endpoint:** `https://dev-callbacks.arcturus-labs.com/zoom/transcripts`
 - **Public OAuth redirect:** `https://dev-callbacks.arcturus-labs.com/zoom/oauth`
-- **Local callback listener:** `http://127.0.0.1:8787/zoom/transcripts`
+- **Local callback listener:** `http://127.0.0.1:8788/zoom/transcripts`
+- **Live transcript UI:** `http://127.0.0.1:8788/live`; setup: [live/README.md](../../../../live/README.md). Same process/port as history; RTMS core remains independent.
 - **Local history UI:** [http://127.0.0.1:8788/events](http://127.0.0.1:8788/events)
 - **Durable reminder:** use the current authorization URL when scopes change and the app must be reauthorized. Authorization codes expire quickly, so the callback route must be live before opening it.
 - **Durable reminder:** the public hostname belongs to the Cloudflare tunnel; the server itself binds to loopback and does not know its public hostname.
@@ -100,8 +101,8 @@ Known failure: video saves broke when `Record active speaker with shared screen`
 
 | Variable | Purpose |
 |---|---|
-| `CALLBACK_HOST`, `CALLBACK_PORT` | webhook listener bind; defaults to `127.0.0.1:8787` |
-| `EVENTS_PORT`, `EVENTS_DATABASE_PATH` | local history UI and activity database |
+| `CALLBACK_HOST`, `SERVER_PORT` | single shared listener; defaults to `127.0.0.1:8788` (user-confirmed existing tunnel target) |
+| `EVENTS_DATABASE_PATH` | history activity database; `CALLBACK_PORT`/`EVENTS_PORT` retired and ignored |
 | `ZOOM_WEBHOOK_SECRET` | HMAC verification of Zoom events |
 | `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` | General-app OAuth credentials for recording downloads |
 | `ZOOM_TOKEN_URL` | OAuth token endpoint; defaults to `https://zoom.us/oauth/token` |
@@ -124,7 +125,7 @@ These are the operations the agent can perform when the user asks about Zoom. Al
 
 - **User request:** "start the Zoom callback," "restart the Zoom app," or "bring the callback back up."
 - **Procedure:** From the repository root, run `./scripts/run-server.sh`. Production normally runs under the LaunchAgent `com.rookkeeper.zoom-transcript-callback`.
-- **Result:** The callback listens on port 8787 and the history UI on port 8788.
+- **Result:** One server on 8788 handles public Zoom endpoints and code-guarded local `/events` and `/live`. Existing tunnel targets 8788; no RTMS-specific routing change. Private UI/API/assets require loopback peer, local Host, no forwarding headers and same Origin/site. Only /zoom/transcripts, /zoom/oauth and /zoom/rtms accept public ingress.
 
 ### Reauthorize the Zoom app
 

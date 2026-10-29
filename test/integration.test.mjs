@@ -6,21 +6,43 @@ import { createApplication } from '../src/application.mjs';
 import { ActivityService } from '../src/activities.mjs';
 import { ActivityRepository } from '../src/repository.mjs';
 import { zoomSignature } from '../src/zoom.mjs';
+import { createLiveHandlers } from '../live/server.mjs';
+import { TranscriptState } from '../live/state.mjs';
 
 test('signed callback is acknowledged before completion, queried locally, and protected from public ingress', async t=>{
   const repo=new ActivityRepository(':memory:');t.after(()=>repo.close());
   const service=new ActivityService(repo);
   let complete;
-  const config={zoomSecret:'test',maxBodyBytes:10000,maxTimestampAgeSeconds:300,piModel:'test',eventsPort:0};
-  const app=createApplication(config,service,()=>new Promise(resolve=>{complete=resolve;}));
-  assert.ok(app.callback && app.admin,'Application must compose both listeners');
-  for(const server of [app.callback,app.admin]){server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>{server.closeAllConnections();server.close();});}
-  const publicUrl=`http://127.0.0.1:${app.callback.address().port}`,localUrl=`http://127.0.0.1:${app.admin.address().port}`;
-  for(const path of ['/events','/api/events'])assert.equal((await fetch(publicUrl+path)).status,404);
-  for(const headers of [{host:'public.example'},{'x-forwarded-host':'public.example'},{'cf-connecting-ip':'1.2.3.4'},{forwarded:'for=1.2.3.4'}]){
-    const status=await new Promise((resolve,reject)=>http.get(localUrl+'/api/events',{headers},response=>{response.resume();resolve(response.statusCode);}).on('error',reject));
-    assert.equal(status,403,JSON.stringify(headers));
+  const config={zoomSecret:'test',maxBodyBytes:10000,maxTimestampAgeSeconds:300,piModel:'test',piMaxAttempts:1};
+  const state=new TranscriptState();
+  state.append({user_id:1,user_name:'Synthetic speaker',timestamp:1,data:'Synthetic shared-server fixture'});
+  const live=createLiveHandlers({webhookSecret:'test',state,controller:{handle(){},async close(){}}});
+  const app=createApplication(config,service,()=>new Promise(resolve=>{complete=resolve;}),{live});
+  assert.ok(app.server,'Application must compose one shared listener');
+  app.server.listen(0,'127.0.0.1');await once(app.server,'listening');t.after(()=>app.close());
+  const publicUrl=`http://127.0.0.1:${app.server.address().port}`,localUrl=publicUrl;
+  for(const path of ['/events','/api/events','/live','/live/app.mjs','/api/live/stream','/api/live/clear']){
+    for(const headers of [{host:'public.example'},{'x-forwarded-host':'public.example'},{'cf-ray':'fake-ray'},{'cf-connecting-ip':'1.2.3.4'},{forwarded:'for=1.2.3.4'},{via:'proxy'},{origin:'https://evil.example'},{'sec-fetch-site':'cross-site'}]){
+      const status=await new Promise((resolve,reject)=>http.get(localUrl+path,{headers},response=>{response.resume();resolve(response.statusCode);}).on('error',reject));
+      assert.equal(status,403,`${path} ${JSON.stringify(headers)}`);
+    }
   }
+  assert.equal((await fetch(localUrl+'/live')).status,200);
+  assert.equal((await fetch(localUrl+'/events')).status,200);
+  assert.equal((await fetch(localUrl+'/not-a-route')).status,404);
+  const stream=await fetch(localUrl+'/api/live/stream');
+  const reader=stream.body.getReader();
+  assert.match(new TextDecoder().decode((await reader.read()).value),/Synthetic shared-server fixture/);
+  await reader.cancel();
+  const challenge=JSON.stringify({event:'endpoint.url_validation',payload:{plainToken:'synthetic-challenge'}});
+  const timestamp=String(Math.floor(Date.now()/1000));
+  for(const path of ['/zoom/transcripts','/zoom/rtms']){
+    const response=await fetch(publicUrl+path,{method:'POST',body:challenge,headers:{host:'public.example','cf-ray':'fake','x-zm-request-timestamp':timestamp,'x-zm-signature':zoomSignature('test',timestamp,challenge)}});
+    assert.equal(response.status,200,path);
+    assert.equal((await response.json()).plainToken,'synthetic-challenge');
+    assert.equal((await fetch(publicUrl+path,{method:'POST',body:challenge})).status,401);
+  }
+  assert.equal((await fetch(publicUrl+'/zoom/oauth',{headers:{host:'public.example','cf-ray':'fake'}})).status,400);
   const payload={event:'recording.transcript_completed',payload:{object:{id:'42',uuid:'meeting',topic:'John and Tom'}}};
   for(const outcome of ['succeeded','failed','incomplete']){
     const body=JSON.stringify(payload),timestamp=String(Math.floor(Date.now()/1000));

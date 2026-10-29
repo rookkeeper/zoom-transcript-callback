@@ -8,7 +8,7 @@ Request flow: HTTP adapter → activity service → repository → SQLite. Pi ex
 |---|---|---|
 | `config.loadConfig()` | environment → config | Ports, paths, limits, Zoom secret, Pi settings and prompt |
 | `zoomPrompt.ZOOM_TRANSCRIPT_PROMPT` | template string | Internal Zoom transcript-processing instructions |
-| `application.createApplication(config, service, processor)` | dependencies → `{callback, admin}` HTTP servers | Creates unbound, separately testable listeners |
+| `application.createApplication(config, service, processor, {live})` | dependencies → `{server, close}` | One unbound HTTP server, public allowlist/private mini-app mounts |
 | `index.mjs` | config → running process | Opens storage, recovers interrupted work, listens, drains jobs on ordinary shutdown |
 
 ## HTTP/API layer
@@ -17,9 +17,9 @@ Request flow: HTTP adapter → activity service → repository → SQLite. Pi ex
 |---|---|---|
 | `callback.callbackHandler(config, activities, processor)` | dependencies → async HTTP handler | POST `/zoom/transcripts`: receipt, signature/body validation, selected Zoom metadata, immediate acknowledgment |
 | `api.activityApi(service, url)` | service + URL → `{status, body}` | GET `/api/events` and `/api/events/:id`; validates pagination/status |
-| `admin.adminServer(service)` | service → HTTP server | Serves API and UI on loopback; exact local Host, rejects forwarding headers |
+| `admin.adminHandler(service)` | service → HTTP handler | History mini-app; shared local-access guard. `adminServer` is a test-fixture wrapper only |
 
-Public callback port defaults to 8787; local history port defaults to 8788. The public listener has no history routes. List query: `endpoint`, `status`, `limit` (1–100), `offset` (nonnegative integer). List response: `{items, limit, offset}`. Detail returns one activity. Invalid queries return 400; missing IDs return 404; storage failures return a generic 500 from the history API.
+One listener defaults to loopback **8788** (`SERVER_PORT`; legacy CALLBACK_PORT/EVENTS_PORT ignored). Public allowlist: POST /zoom/transcripts, GET /zoom/oauth, POST /zoom/rtms. Private history/live routes and assets require `routing/localAccess.mjs`: loopback peer, exact local Host, no forwarded/Cloudflare hints, matching Origin/site. Deny before dispatch; unknown routes 404. Peer alone is insufficient because the tunnel connects locally. `src/index.mjs` composes independent recording and live cores and shuts down live sockets/SSE while accepted recording jobs drain. List query: `endpoint`, `status`, `limit` (1–100), `offset` (nonnegative integer). List response: `{items, limit, offset}`. Detail returns one activity. Invalid queries return 400; missing IDs return 404; storage failures return a generic 500 from the history API.
 
 ## Service layer: `activities.ActivityService(repository)`
 
