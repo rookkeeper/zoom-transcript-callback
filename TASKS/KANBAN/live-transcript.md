@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: blocked
 ---
 # Isolated live Zoom transcript
 
@@ -13,4 +13,4 @@ Owner: orchestrator; implementation running in `.worktrees/live-transcript` on `
 
 Activation progress: John confirmed the app uses Development credentials, added Meeting RTMS started/stopped/interrupted events in Development, and reauthorized successfully. Orchestrator verified the updated OAuth grant includes `meeting:read:meeting_transcript` and retains recording-file list access (no tokens displayed). Cloudflare connector is remotely token-managed; same hostname/tunnel is reused, but exact `/zoom/rtms` path routing to 8789 still needs dashboard configuration. Auto-start, entitlement/credits, endpoint validation and a private live-meeting test remain unverified. Shared credentials exist (values not printed); new default ports 8789/8790 are free. No credits purchased.
 
-Implementation returned at `2c6d249`; independent review and parent QA underway. Parent synthetic browser checks confirm matching speaker/text colors, literal script inert, stable selection during incoming rows, refresh snapshot; public transcript routes 404 and forwarded/hostile-origin private requests 403. Parent reran 18 live tests, 2 live browser tests, and 58 root tests successfully. Review identified paused state lost on media reconnect; actual fake-WS repro confirms, fix pending.
+Software integrated into main, independent review fixes accepted. Parent validation: 19 live tests, 3 live browser tests, 58 root tests, 2 root browser tests pass. Synthetic browser QA confirms colors, literal script inert, stable selection, refresh and private boundary. Service installed separately for login startup; http://127.0.0.1:8790/live is running, Waiting. Local signed validation succeeds; public signed validation on `/zoom/rtms` returns **404**. Remaining blocker: remote Cloudflare exact-path routing, Zoom endpoint validation/auto-start/entitlement and private real-meeting QA. No live Zoom run claimed. [Outcome and next steps](../WIP/2026-10-29-live-transcript/outcome.md).

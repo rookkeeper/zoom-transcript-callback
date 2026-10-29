@@ -34,6 +34,21 @@ kill -TERM "$LIVE_PID"; wait "$LIVE_PID"
 
 Shutdown attempts RTMS stream-close message 21, closes both WS connections, retries, SSE and HTTP listeners. Restart Node and stop/restart RTMS in Zoom if it has already timed out; restarting the browser alone cannot create a new Zoom stream.
 
+## Start at login on this Mac
+
+Installed separately from the recording service as `~/Library/LaunchAgents/com.rookkeeper.zoom-live-transcript.plist`. It runs `/opt/homebrew/bin/node` with this repository's absolute `live/scripts/start.mjs` path, starts at login and restarts on exit. The plist contains paths only, not credentials; startup reads the shared root `.env`. Moving the repository or Node requires updating those paths. Do not start a second foreground copy on the same ports.
+
+```sh
+# Inspect this service only:
+launchctl print "gui/$(id -u)/com.rookkeeper.zoom-live-transcript"
+# Stop/disable it (text in memory is lost):
+launchctl bootout "gui/$(id -u)/com.rookkeeper.zoom-live-transcript"
+# Enable/start it again:
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.rookkeeper.zoom-live-transcript.plist"
+```
+
+Startup-only diagnostics: `~/Library/Logs/zoom-live-transcript.log` and `zoom-live-transcript.error.log`; no transcript text is logged. Installing on another machine is optional: use the foreground command above, or create an independent LaunchAgent with its own absolute Node/script paths, `RunAtLoad`, `KeepAlive`, and no embedded secrets. Do not change or restart the recording service's LaunchAgent.
+
 ## Zoom setup
 
 Use the **Development** environment of the existing app throughout: credentials, scopes, event subscriptions and installation must match. Do not switch the shared `.env` to Production credentials just for this feature.

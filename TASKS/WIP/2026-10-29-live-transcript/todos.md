@@ -26,9 +26,9 @@ Base: 75fc840 (committed planning)
 - [x] Attempt available external setup safely; record missing account access/credits/approval. Live verification remains blocked until private Zoom test.
 - [x] Sync main, inspect diff, fix accepted review findings and repeat validation. ~ Both P1s fixed; retained reviewer recheck OK with one stale-doc note, corrected. Parent final 19 live/3 live-browser/2 root-browser pass; 58 root tests passed.
 - [x] No user-attended walkthrough requested; no approval gate.
-- [ ] Merge locally only when software validation is ready; no push.
-- [ ] Record outcome and usage. Archive only if acceptance complete; otherwise keep explicit blocked activation state.
-- [ ] Clean worktree when safe.
+- [x] Merge locally only when software validation is ready; no push. ~ Integrated after reviewer clearance; existing implementation unchanged.
+- [x] Record outcome and usage. Archive only if acceptance complete; otherwise keep explicit blocked activation state. ~ outcome.md records running service, local validation success and public route 404; activation remains blocked.
+- [x] Clean worktree when safe. ~ Stopped verified owned synthetic demo, removed clean merged live-transcript worktree and deleted merged branch. Unrelated worktrees untouched.
 
 
 ## Implementation evidence (worker)
