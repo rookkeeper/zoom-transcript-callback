@@ -113,12 +113,13 @@ export class RtmsController {
     } else if (ws.ready && msg.msg_type === 8) {
       if (msg.state === 2) this.retry(msg.reason === 14 ? 'media' : 'signal');
       else if (msg.state === 3 || msg.state === 4) {
-        if (msg.reason === 8) this.state.clear();
+        if ((msg.reason ?? msg.stop_reason) === 8) this.state.clear();
         this.end('ended', 'Zoom ended this stream. To reconnect, stop and restart RTMS in Zoom.');
       }
       else if (msg.state === 5) this.state.setStatus('paused', 'RTMS paused in Zoom.');
       else if (msg.state === 1 || msg.state === 6) { if (this.media?.ready) this.liveStatus(); }
     } else if (ws.ready && msg.msg_type === 9) {
+      if (msg.state === 5 && (msg.reason ?? msg.stop_reason) === 8) this.state.clear();
       if (msg.state === 3 || msg.state === 5) this.state.setStatus('paused', 'Zoom session paused or stopped; waiting for it to resume.');
       else if ((msg.state === 2 || msg.state === 4) && this.media?.ready) this.liveStatus();
     }

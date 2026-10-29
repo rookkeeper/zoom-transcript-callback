@@ -47,7 +47,7 @@ Account permission, credits, scopes, reauthorization, auto-start and a private l
 
 ### Tunnel routing (do not expose the viewer)
 
-Add the exact RTMS path rule **before** any existing same-host catch-all rule. Preserve existing recording/OAuth routing to 8787. Example Cloudflare ingress fragment (not an applied configuration):
+Add the exact RTMS path rule **before** any existing same-host catch-all rule. Preserve existing recording/OAuth routing to 8787. The current tunnel is remote token-managed: configure its route ordering through the authorized remote management surface; editing a local ingress file will not apply it. Example Cloudflare ingress fragment illustrating the required ordering (not an applied configuration):
 
 ```yaml
 - hostname: <callback-host>

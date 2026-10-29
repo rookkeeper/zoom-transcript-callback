@@ -144,3 +144,49 @@ test('Zoom pause/resume, media interruption event, revocation and graceful shutd
   await controller.close();
   await waitFor(() => fake.received.some(e => e.kind === 'signal' && e.msg.msg_type === 21));
 });
+
+test('session states 2/3/4/5 preserve ordinary stopped text but broadcast deletion on revocation', async t => {
+  const fake = await fakeZoom(t), state = new TranscriptState(), updates = [];
+  state.on('update', update => updates.push(update));
+  const controller = new RtmsController({ clientId: 'fake', clientSecret: 'fake', state, validateUrl: acceptLocal });
+  t.after(() => controller.close());
+  controller.handle(started(Date.now(), 's', fake.url)); await waitFor(() => state.status === 'live');
+  state.append({ user_id: 1, timestamp: 1, data: 'Synthetic session fixture' });
+  const session = message => fake.sockets.signal[0].send(JSON.stringify({ msg_type: 9, ...message }));
+  session({ state: 3 }); await waitFor(() => state.status === 'paused');
+  assert.equal(state.rows.length, 1);
+  session({ state: 4 }); await waitFor(() => state.status === 'live');
+  session({ state: 5, stop_reason: 6 }); await waitFor(() => state.status === 'paused');
+  assert.equal(state.rows.length, 1);
+  session({ state: 2 }); await waitFor(() => state.status === 'live');
+  session({ state: 5, stop_reason: 8 }); await waitFor(() => state.status === 'paused');
+  assert.equal(state.rows.length, 0);
+  assert.equal(updates.at(-2).type, 'snapshot');
+  assert.equal(updates.at(-2).rows.length, 0);
+});
+
+test('stream terminating/terminated and stopped webhooks retain ordinary ends but clear revoked text', async t => {
+  const fake = await fakeZoom(t), state = new TranscriptState(), updates = [];
+  state.on('update', update => updates.push(update));
+  const controller = new RtmsController({ clientId: 'fake', clientSecret: 'fake', state, validateUrl: acceptLocal });
+  t.after(() => controller.close());
+  const ts = Date.now(), event = started(ts, 's', fake.url);
+  controller.handle(event); await waitFor(() => state.status === 'live');
+  state.append({ user_id: 1, timestamp: 1, data: 'Synthetic ended fixture' });
+  fake.sockets.signal[0].send(JSON.stringify({ msg_type: 8, state: 3, reason: 6 }));
+  await waitFor(() => state.status === 'ended');
+  assert.equal(state.rows.length, 1);
+  controller.handle({ ...event, event: 'meeting.rtms_stopped', event_ts: ts + 1, payload: { ...event.payload, stop_reason: 8 } });
+  assert.equal(state.rows.length, 0); assert.equal(updates.at(-1).type, 'snapshot');
+  controller.handle(started(ts + 2, 's2', fake.url)); await waitFor(() => state.status === 'live');
+  state.append({ user_id: 1, timestamp: 2, data: 'Synthetic revoked fixture' });
+  fake.sockets.signal[1].send(JSON.stringify({ msg_type: 8, state: 4, reason: 8 }));
+  await waitFor(() => state.status === 'ended');
+  assert.equal(state.rows.length, 0); assert.equal(updates.at(-2).type, 'snapshot');
+  controller.handle(started(ts + 3, 's3', fake.url)); await waitFor(() => state.status === 'live');
+  state.append({ user_id: 1, timestamp: 3, data: 'Synthetic ordinary meeting end' });
+  controller.handle({ ...started(ts + 4, 's3', fake.url), event: 'meeting.rtms_stopped', payload: { meeting_uuid: 'm', rtms_stream_id: 's3', stop_reason: 6 } });
+  assert.equal(state.status, 'ended'); assert.equal(state.rows.length, 1);
+  controller.handle({ ...started(ts + 5, 's4', fake.url), payload: { meeting_uuid: 'new-fake-meeting', rtms_stream_id: 's4', server_urls: fake.url } });
+  assert.equal(state.rows.length, 0);
+});
