@@ -24,7 +24,7 @@ Base: 75fc840 (committed planning)
 - [x] Run focused tests and existing tests; record actual results.
 - [x] Independently operate synthetic demo in real browser (parent); inspect security boundaries and refresh. ~ Matching colors, inert markup, selection retained while rows arrive, refresh snapshot; public 404/private forwarded and hostile-origin 403. Clipboard fallback observed in managed browser; automated clipboard test passed.
 - [x] Attempt available external setup safely; record missing account access/credits/approval. Live verification remains blocked until private Zoom test.
-- [ ] Sync main, inspect diff, fix accepted review findings and repeat validation.
+- [x] Sync main, inspect diff, fix accepted review findings and repeat validation. ~ Both P1s fixed; retained reviewer recheck OK with one stale-doc note, corrected. Parent final 19 live/3 live-browser/2 root-browser pass; 58 root tests passed.
 - [x] No user-attended walkthrough requested; no approval gate.
 - [ ] Merge locally only when software validation is ready; no push.
 - [ ] Record outcome and usage. Archive only if acceptance complete; otherwise keep explicit blocked activation state.
@@ -46,7 +46,7 @@ Base: 75fc840 (committed planning)
 
 ## Remaining gates / explicit limits
 
-- Parent independent browser QA completed. Reviewer found pause loss on media recovery and unsupported automatic-event subscription; parent reproduced and corrected both with regressions. Focused review recheck pending. Parent owns main synchronization, integration and task archival. Worker must not merge or archive.
+- Parent independent browser QA completed. Reviewer found pause loss on media recovery and unsupported automatic-event subscription; parent reproduced and corrected both with regressions. Retained reviewer recheck returned OK with notes: stale event7 architecture prose corrected; no new runtime defects in fix blast radius. Parent owns main synchronization, integration and task archival. Worker must not merge or archive.
 - **Live Zoom verification is blocked pending parent-managed external setup and a private hosted test meeting**: entitlement/credits, transcript scope, event subscription, app reauthorization, sharing permission and auto-start. Worker made no external changes/purchases and did not inspect/print secrets or real transcripts. Synthetic demo is not proof of Zoom activation.
 - Deliberately single active hosted meeting; retained state limited to 2,000 rows/512 KiB and bounded dedup windows. Historical gaps cannot be replayed. Only unencrypted transcript JSON over validated `wss://*.zoom.us:443` endpoints is supported; verify the actual account endpoint during activation. Exhausted recovery clearly requires Zoom RTMS stop/restart rather than silently promising recovery.
 
