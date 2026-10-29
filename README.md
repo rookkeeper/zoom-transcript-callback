@@ -185,3 +185,7 @@ Before configuring Zoom, test the full local path with a signed fixture and a fa
 - Enforce the request age and body-size limits.
 - The webhook payload is untrusted meeting data. The callback uses a fixed Pi executable, skill list, model setting, and prompt file; payload values cannot configure code execution.
 - Each accepted callback starts a new Pi session in an isolated private working directory.
+
+## Standalone live transcript viewer
+
+[`live/`](./live/README.md) is a separate, memory-only Zoom RTMS transcript utility for hosted meetings. It uses its own Node package, public `POST /zoom/rtms` listener (8789) and loopback-only `/live` viewer/SSE (8790); the existing recording/Pi pipeline is unchanged. It shares only the root Zoom app credentials. See its README for setup, scopes/credits, auto-start, exact tunnel-path precedence, isolated credential-free demo, tests and safe start/stop commands. Never tunnel the viewer. Live Zoom activation/verification is an external gate, not established by the synthetic demo.

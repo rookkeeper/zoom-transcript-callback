@@ -1,0 +1,14 @@
+{
+  "name": "@rookkeeper/zoom-live-transcript",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.16" },
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "demo": "node scripts/demo.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "playwright test --config=playwright.config.mjs"
+  },
+  "dependencies": { "ws": "^8.18.3" },
+  "devDependencies": { "@playwright/test": "^1.63.0" }
+}

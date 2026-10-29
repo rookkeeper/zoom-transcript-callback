@@ -1,0 +1,18 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #15191f; color: #e9eef5; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 1100px; padding: 18px 24px; height: 100dvh; display: flex; flex-direction: column; }
+h1 { font-size: 1.4rem; margin: 0 0 10px; }
+p { margin: 8px 0; }
+#detail, .privacy { color: #b9c5d5; font-size: .9rem; }
+#scroll-status { color: #ffd788; margin-left: 12px; }
+nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+button { border: 1px solid #77869c; border-radius: 5px; padding: 7px 12px; background: #242d39; color: inherit; font: inherit; cursor: pointer; }
+button:hover { background: #344153; }
+button:focus-visible, main:focus-visible { outline: 2px solid #a4d8ff; outline-offset: 3px; }
+#notice, #retention { font-size: .9rem; color: #ffd788; }
+#transcript { flex: 1; min-height: 120px; overflow: auto; overflow-anchor: none; border-top: 1px solid #435064; padding-top: 12px; scroll-behavior: auto; }
+.utterance { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; margin: 0 0 12px; user-select: text; }
+::selection { background: #456084; color: white; }
+.speaker-0 { color: #a4d8ff; }.speaker-1 { color: #ffcc99; }.speaker-2 { color: #afe6ba; }.speaker-3 { color: #e6b6ff; }
+.speaker-4 { color: #ffd5e0; }.speaker-5 { color: #a4e7df; }.speaker-6 { color: #e5e89c; }.speaker-7 { color: #bcc9ff; }
+@media (max-width: 600px) { body { padding: 12px; } button { font-size: .9rem; } }
